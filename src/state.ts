@@ -1,20 +1,39 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import type { Harness, Job, TartarusState } from "./types.js";
+import type { Harness, Job, ProjectDna, TartarusState } from "./types.js";
 import { DEFAULT_HARNESSES } from "./harnesses.js";
 
 const STATE_PATH =
   process.env.TARTARUS_STATE ?? join(homedir(), ".tartarus", "state.json");
 
+function defaultDna(): ProjectDna {
+  return {
+    setup: [],
+    envCopy: [".env", ".env.local", ".env.development.local"],
+    guideFiles: [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "ZERO.md",
+      ".zero/AGENTS.md",
+      "PRODUCT.md",
+      "CONTRIBUTING.md",
+      "README.md",
+    ],
+    portsBase: 4100,
+    autoSetup: false,
+  };
+}
+
 function empty(): TartarusState {
   return {
-    version: 3,
+    version: 4,
     harnesses: DEFAULT_HARNESSES.map((h) => ({ ...h })),
     jobs: [],
     projectRoot: process.cwd(),
-    envCopy: [".env", ".env.local", ".env.development.local"],
+    envCopy: defaultDna().envCopy!,
     defaultTimeoutMs: 30 * 60_000,
+    dna: defaultDna(),
   };
 }
 
@@ -22,10 +41,12 @@ function migrate(raw: unknown): TartarusState {
   const base = empty();
   if (!raw || typeof raw !== "object") return base;
   const p = raw as Record<string, unknown>;
-  const harnesses = Array.isArray(p.harnesses) && p.harnesses.length
-    ? (p.harnesses as Harness[])
-    : base.harnesses;
+  const harnesses =
+    Array.isArray(p.harnesses) && p.harnesses.length
+      ? (p.harnesses as Harness[])
+      : base.harnesses;
   const jobs = Array.isArray(p.jobs) ? (p.jobs as Job[]) : [];
+  const dnaRaw = (p.dna as ProjectDna) ?? {};
   return {
     ...base,
     harnesses,
@@ -36,11 +57,12 @@ function migrate(raw: unknown): TartarusState {
     projectRoot: (p.projectRoot as string) ?? base.projectRoot,
     envCopy: Array.isArray(p.envCopy)
       ? (p.envCopy as string[])
-      : (p.dna as { envCopy?: string[] })?.envCopy ?? base.envCopy,
+      : dnaRaw.envCopy ?? base.envCopy,
     defaultTimeoutMs:
       typeof p.defaultTimeoutMs === "number"
         ? p.defaultTimeoutMs
         : base.defaultTimeoutMs,
+    dna: { ...defaultDna(), ...dnaRaw },
   };
 }
 
@@ -126,7 +148,15 @@ export class Store {
 
   setEnvCopy(files: string[]): void {
     this.state.envCopy = files;
+    this.state.dna = { ...this.state.dna, envCopy: files };
     this.persist();
+  }
+
+  setDna(dna: Partial<ProjectDna>): ProjectDna {
+    this.state.dna = { ...this.state.dna, ...dna };
+    if (dna.envCopy) this.state.envCopy = dna.envCopy;
+    this.persist();
+    return this.state.dna;
   }
 }
 

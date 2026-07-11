@@ -10,8 +10,23 @@ import { randomBytes } from "node:crypto";
 function which(bin) {
     if (bin.includes("/") || bin.includes("\\"))
         return bin;
+    // Search expanded PATH (Homebrew, go/bin, local, hermes, etc.)
+    const home = process.env.HOME ?? "";
+    const extra = [
+        `${home}/.local/bin`,
+        `${home}/go/bin`,
+        `${home}/.hermes/node/bin`,
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+    ]
+        .filter(Boolean)
+        .join(":");
     const r = spawnSync(process.platform === "win32" ? "where" : "which", [bin], {
         encoding: "utf8",
+        env: {
+            ...process.env,
+            PATH: `${extra}:${process.env.PATH ?? ""}`,
+        },
     });
     if (r.status !== 0)
         return null;
@@ -214,6 +229,83 @@ const glm = {
         };
     },
 };
+/** pi.dev — https://pi.dev — @earendil-works/pi-coding-agent */
+const pi = {
+    kind: "pi",
+    binaries: ["pi"],
+    label: "Pi (pi.dev)",
+    versionArgs: ["--version"],
+    notes: "pi.dev coding agent. Headless: -p/--print --mode text --approve (trust project files for the run).",
+    build(input) {
+        const pf = maybePromptFile(input.prompt, "pi");
+        const message = pf.useFile && pf.file
+            ? `Read and execute the task in ${pf.file}`
+            : input.prompt;
+        const args = [
+            ...input.baseArgs,
+            "-p",
+            "--mode",
+            "text",
+            // Trust project-local files for this unattended run
+            "--approve",
+        ];
+        if (input.model) {
+            args.push("--model", input.model);
+        }
+        args.push(message);
+        return {
+            args,
+            env: {
+                PI_OFFLINE: "0",
+            },
+            summary: `pi -p --mode text --approve …`,
+            promptFile: pf.file,
+        };
+    },
+};
+/**
+ * Zero (Gitlawb) — https://github.com/Gitlawb/zero
+ * Headless: `zero exec "goal"`
+ * Note: another CLI also named `zero` (AgentMesh) uses `zero run` — we detect.
+ */
+const zero = {
+    kind: "zero",
+    binaries: ["zero"],
+    label: "Zero",
+    versionArgs: ["version"],
+    notes: "Gitlawb/zero coding agent (`zero exec`). If PATH has AgentMesh zero instead, falls back to `zero run`.",
+    build(input) {
+        const pf = maybePromptFile(input.prompt, "zero");
+        const message = pf.useFile && pf.file
+            ? `Read and execute the task in ${pf.file}`
+            : input.prompt;
+        const variant = detectZeroVariant("zero");
+        if (variant === "agentmesh") {
+            return {
+                args: [...input.baseArgs, "run", message],
+                env: {},
+                summary: `zero run … (AgentMesh CLI on PATH)`,
+                promptFile: pf.file,
+            };
+        }
+        // Gitlawb/zero headless exec
+        const args = [...input.baseArgs, "exec"];
+        if (input.model) {
+            args.push("--model", input.model);
+        }
+        // Prefer text output for logs; stream-json available for tooling later
+        args.push("--output-format", "text");
+        args.push(message);
+        return {
+            args,
+            env: {},
+            summary: variant === "gitlawb"
+                ? `zero exec --output-format text …`
+                : `zero exec … (best-effort)`,
+            promptFile: pf.file,
+        };
+    },
+};
 const custom = {
     kind: "custom",
     binaries: [],
@@ -236,8 +328,40 @@ export const ADAPTERS = {
     gemini,
     grok,
     glm,
+    pi,
+    zero,
     custom,
 };
+/** Distinguish Gitlawb/zero vs AgentMesh `zero` on PATH */
+function detectZeroVariant(command) {
+    const help = spawnSync(command, ["--help"], {
+        encoding: "utf8",
+        timeout: 5_000,
+    });
+    const out = `${help.stdout ?? ""}${help.stderr ?? ""}`.toLowerCase();
+    if (out.includes("agentmesh"))
+        return "agentmesh";
+    if (out.includes("zero exec") || out.includes("\n  zero exec")) {
+        return "gitlawb";
+    }
+    // AgentMesh usage line: zero run "goal"
+    if (out.includes('zero run "') || out.includes("zero run '")) {
+        return "agentmesh";
+    }
+    const execHelp = spawnSync(command, ["exec", "--help"], {
+        encoding: "utf8",
+        timeout: 5_000,
+    });
+    const eout = `${execHelp.stdout ?? ""}${execHelp.stderr ?? ""}`.toLowerCase();
+    if (execHelp.status === 0 ||
+        eout.includes("output-format") ||
+        eout.includes("worktree")) {
+        return "gitlawb";
+    }
+    if (out.includes("coding agent") || out.includes("gitlawb"))
+        return "gitlawb";
+    return "unknown";
+}
 export function resolveBinary(kind, preferredCommand) {
     const candidates = [];
     if (preferredCommand)

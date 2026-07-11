@@ -1,6 +1,6 @@
 import { createWorktree, listWorktrees, removeWorktree } from "./worktree.js";
 import { inspectMany, inspectPath } from "./inspect.js";
-import type { Harness, Job, JobStatus } from "./types.js";
+import type { ContextPack, Harness, Job, JobStatus, ProjectDna } from "./types.js";
 export declare function refreshHarnesses(): Harness[];
 export declare function connectHarness(input: {
     id?: string;
@@ -24,12 +24,16 @@ export { inspectPath, inspectMany };
 export declare function runOnHarness(input: {
     harnessId: string;
     prompt: string;
+    /** Structured context (preferred). Merged with prompt. */
+    context?: ContextPack;
     cwd?: string;
     worktreeBranch?: string;
     tag?: string;
     timeoutMs?: number;
     model?: string;
     safer?: boolean;
+    /** Run dna.setup after worktree create */
+    runSetup?: boolean;
 }): Job;
 export declare function killJob(jobId: string): boolean;
 export declare function killByTag(tag: string): {
@@ -41,16 +45,33 @@ export declare function waitForJob(jobId: string, timeoutMs?: number): Promise<J
  */
 export declare function fanout(input: {
     prompt: string;
+    context?: ContextPack;
     harnessIds: string[];
     useWorktrees?: boolean;
     tag?: string;
     timeoutMs?: number;
     model?: string;
     safer?: boolean;
+    runSetup?: boolean;
 }): {
     tag: string;
     jobs: Job[];
     errors: string[];
+};
+export declare function setProjectDna(dna: Partial<ProjectDna>): ProjectDna;
+export declare function getJobHandoff(jobId: string): import("./types.js").JobSummary | null;
+/** Preview the brief that would be sent (no spawn). */
+export declare function previewContext(input: {
+    prompt: string;
+    context?: ContextPack;
+    harnessId?: string;
+    cwd?: string;
+}): {
+    goal: string;
+    guidesFound: string[];
+    filesIncluded: string[];
+    brief: string;
+    adapterPromptPreview: string;
 };
 /** Facts for orchestrator to compare fanout results */
 export declare function inspectJobs(opts: {
@@ -90,8 +111,21 @@ export declare function snapshot(): {
     note: string;
     projectRoot: string | undefined;
     envCopy: string[];
+    dna: ProjectDna;
     harnesses: Harness[];
-    jobs: Job[];
+    jobs: {
+        id: string;
+        harnessId: string;
+        status: JobStatus;
+        tag: string | undefined;
+        briefPath: string | undefined;
+        worktree: string | undefined;
+        summary: {
+            filesChanged: number | undefined;
+            additions: number | undefined;
+            deletions: number | undefined;
+        } | undefined;
+    }[];
     activeJobIds: string[];
     worktrees: string[];
     adapters: {

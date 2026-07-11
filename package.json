@@ -1,15 +1,17 @@
 {
   "name": "tartarus",
-  "version": "0.6.0",
+  "version": "0.7.0",
+  "author": "AJSubrizi",
   "private": false,
   "type": "module",
   "description": "The harness for the harnesses — MCP so Claude/Codex/Cursor orchestrate other agents",
   "bin": {
     "tartarus": "./dist/cli.js"
   },
-  "main": "./dist/cli.js",
+  "main": "desktop/main.cjs",
   "files": [
     "dist",
+    "desktop",
     "install.sh",
     "README.md",
     "PRODUCT.md",
@@ -24,6 +26,9 @@
     "prepare": "node scripts/ensure-build.mjs",
     "start": "node dist/cli.js app",
     "app": "node dist/cli.js app",
+    "desktop": "pnpm build && electron .",
+    "desktop:pack": "pnpm build && electron-builder --mac dir --publish never",
+    "desktop:open": "pnpm desktop:pack && open release/mac-arm64/Tartarus.app || open release/mac/Tartarus.app",
     "mcp": "node dist/cli.js mcp",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx scripts/smoke.ts",
@@ -39,8 +44,39 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.12",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
+  },
+  "build": {
+    "appId": "dev.tartarus.app",
+    "productName": "Tartarus",
+    "copyright": "Copyright © AJSubrizi",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "desktop/main.cjs"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Tartarus"
+    }
   },
   "engines": {
     "node": ">=20"

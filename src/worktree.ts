@@ -16,6 +16,8 @@ export interface WorktreeResult {
   path?: string;
   branch?: string;
   error?: string;
+  setupRan?: string[];
+  setupErrors?: string[];
 }
 
 function git(repo: string, args: string[]) {
@@ -50,10 +52,42 @@ function baseDir(repo: string): string {
   return join(repo, ".tartarus", "worktrees");
 }
 
-/** Primitive: create isolated worktree + copy env. No policy. */
+export function runSetupCommands(
+  cwd: string,
+  commands?: string[],
+): { ran: string[]; errors: string[] } {
+  const cmds =
+    commands ??
+    store.state.dna.setup ??
+    [];
+  const ran: string[] = [];
+  const errors: string[] = [];
+  for (const cmd of cmds) {
+    if (!cmd.trim()) continue;
+    const r = spawnSync(cmd, {
+      cwd,
+      shell: true,
+      encoding: "utf8",
+      env: { ...process.env, TARTARUS: "1", CI: "1" },
+      timeout: 10 * 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    ran.push(cmd);
+    if (r.status !== 0) {
+      errors.push(
+        `${cmd}: ${(r.stderr || r.stdout || `exit ${r.status}`).slice(0, 500)}`,
+      );
+    }
+  }
+  return { ran, errors };
+}
+
+/** Primitive: create isolated worktree + env + optional setup. */
 export function createWorktree(opts: {
   repo?: string;
   branch: string;
+  /** Override dna.autoSetup */
+  runSetup?: boolean;
 }): WorktreeResult {
   const repoIn = opts.repo ?? store.state.projectRoot ?? process.cwd();
   if (!isGitRepo(repoIn)) {
@@ -64,17 +98,22 @@ export function createWorktree(opts: {
   const dir = join(baseDir(repo), branch.replace(/\//g, "__"));
   mkdirSync(baseDir(repo), { recursive: true });
 
+  let reused = false;
   if (existsSync(dir) && git(dir, ["rev-parse", "--is-inside-work-tree"]).ok) {
-    return { ok: true, path: dir, branch };
+    reused = true;
+  } else {
+    let r = git(repo, ["worktree", "add", "-B", branch, dir, "HEAD"]);
+    if (!r.ok) r = git(repo, ["worktree", "add", dir, branch]);
+    if (!r.ok) {
+      return { ok: false, error: r.err || r.out || "worktree add failed" };
+    }
   }
 
-  let r = git(repo, ["worktree", "add", "-B", branch, dir, "HEAD"]);
-  if (!r.ok) r = git(repo, ["worktree", "add", dir, branch]);
-  if (!r.ok) {
-    return { ok: false, error: r.err || r.out || "worktree add failed" };
-  }
+  const envNames = store.state.dna.envCopy?.length
+    ? store.state.dna.envCopy
+    : store.state.envCopy;
 
-  for (const name of store.state.envCopy) {
+  for (const name of envNames) {
     const src = join(repo, name);
     if (existsSync(src) && statSync(src).isFile()) {
       try {
@@ -85,16 +124,35 @@ export function createWorktree(opts: {
     }
   }
 
+  let setupRan: string[] | undefined;
+  let setupErrors: string[] | undefined;
+  const shouldSetup =
+    opts.runSetup ?? store.state.dna.autoSetup ?? false;
+  if (shouldSetup && !reused) {
+    const s = runSetupCommands(dir);
+    setupRan = s.ran;
+    setupErrors = s.errors.length ? s.errors : undefined;
+  }
+
   try {
     writeFileSync(
       join(dir, ".tartarus.json"),
-      JSON.stringify({ branch, createdAt: Date.now() }, null, 2),
+      JSON.stringify(
+        {
+          branch,
+          createdAt: Date.now(),
+          setupRan,
+          setupErrors,
+        },
+        null,
+        2,
+      ),
     );
   } catch {
     /* ignore */
   }
 
-  return { ok: true, path: dir, branch };
+  return { ok: true, path: dir, branch, setupRan, setupErrors };
 }
 
 export function removeWorktree(opts: {

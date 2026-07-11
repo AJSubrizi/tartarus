@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.0
+
+### Context pack (major)
+- Structured `context` on `run` / `fanout`: goal, constraints, notes, files, handoffFromJobId
+- Renders `.tartarus/brief-<job>.md` in the workspace for every job
+- Auto-discovers project guides (AGENTS.md, CLAUDE.md, ZERO.md, …)
+- Inlines priority files into the brief
+- `tartarus_preview_context` + richer `tartarus_preview_run`
+- `tartarus_handoff` + automatic job summary on finish
+- Project DNA: `setup` hooks, `autoSetup`, guide file list
+- Worktree setup commands (`pnpm install`, etc.)
+
+### Release
+- GitHub Actions release workflow (mac app zip + optional linux)
+
+## 0.6.1
+
+- Adapters: **Pi (pi.dev)** headless `-p --mode text --approve`
+- Adapters: **Zero** ([Gitlawb/zero](https://github.com/Gitlawb/zero)) via `zero exec`; auto-detects AgentMesh `zero run` if that’s what’s on PATH
+- Broader PATH search (`~/.local/bin`, `~/go/bin`, Hermes, Homebrew)
+
 ## 0.6.0
 
 - **GUI setup app**: open Tartarus → see subscriptions → Install MCP on Claude / Codex / Cursor

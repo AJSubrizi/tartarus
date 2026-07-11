@@ -1,13 +1,30 @@
 /**
  * Tartarus MCP — tools for the MAIN harness (the orchestrator).
- * Tartarus only runs primitives with solid CLI adapters.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { store } from "./state.js";
-import { cleanupTag, connectHarness, createWorktree, disconnectHarness, fanout, getJobLog, inspectJobs, inspectPath, killByTag, killJob, listAdapters, listJobsFiltered, listWorktrees, refreshHarnesses, removeWorktree, runOnHarness, snapshot, waitForJob, } from "./runtime.js";
+import { cleanupTag, connectHarness, createWorktree, disconnectHarness, fanout, getJobHandoff, getJobLog, inspectJobs, inspectPath, killByTag, killJob, listAdapters, listJobsFiltered, listWorktrees, previewContext, refreshHarnesses, removeWorktree, runOnHarness, setProjectDna, snapshot, waitForJob, } from "./runtime.js";
 import { buildRun, formatCommandLine } from "./harnesses.js";
+import { VERSION } from "./doctor.js";
+const contextSchema = z
+    .object({
+    goal: z.string().optional(),
+    constraints: z.array(z.string()).optional(),
+    notes: z.array(z.string()).optional(),
+    files: z
+        .array(z.string())
+        .optional()
+        .describe("Relative paths to inline into the brief"),
+    handoffFromJobId: z
+        .string()
+        .optional()
+        .describe("Prior job id — inject handoff summary"),
+    extraMarkdown: z.string().optional(),
+    skipProjectGuides: z.boolean().optional(),
+})
+    .optional();
 function text(data) {
     return {
         content: [
@@ -21,24 +38,26 @@ function text(data) {
 export function createMcpServer() {
     const server = new McpServer({
         name: "tartarus",
-        version: "0.4.0",
+        version: VERSION,
     });
-    server.tool("tartarus_help", "Read first. YOU orchestrate; Tartarus only spawns/inspects.", {}, async () => text(`TARTARUS — harness for the harnesses
+    server.tool("tartarus_help", "Read first. YOU orchestrate; Tartarus packages context and spawns workers.", {}, async () => text(`TARTARUS ${VERSION}
 
-YOU = orchestrator (this agent session).
-Tartarus = primitives: connect, worktree, run, fanout, inspect, kill, logs.
+YOU = orchestrator. Tartarus = context pack + worktree + spawn + inspect.
 
-Typical flow:
-1. tartarus_refresh / tartarus_adapters
-2. tartarus_set_project
-3. tartarus_fanout { prompt, harnessIds }
-4. tartarus_wait or tartarus_job (poll)
-5. tartarus_inspect_jobs { tag }  ← git facts to decide winner
-6. YOU pick winner → tartarus_kill / tartarus_cleanup_tag on losers
-7. ship from the winning worktree
+Context contract:
+- Pass a full brief in prompt and/or context { goal, constraints, notes, files, handoffFromJobId }
+- Tartarus builds .tartarus/brief-<job>.md in the workspace
+- Project guides (AGENTS.md, CLAUDE.md, …) are listed if present
+- Optional setup commands via tartarus_set_dna { setup: ["pnpm install"], autoSetup: true }
 
-Tartarus never auto-picks a winner.`));
-    server.tool("tartarus_status", "Snapshot: harnesses, jobs, worktrees, adapters.", {}, async () => text(snapshot()));
+Flow:
+1. tartarus_set_project
+2. tartarus_preview_context (optional)
+3. tartarus_run / tartarus_fanout with context
+4. tartarus_wait → tartarus_handoff / tartarus_inspect_jobs
+5. YOU pick winner → cleanup_tag losers
+`));
+    server.tool("tartarus_status", "Snapshot: harnesses, jobs, worktrees, dna.", {}, async () => text(snapshot()));
     server.tool("tartarus_adapters", "CLI adapters: binaries, path, version, headless notes.", {}, async () => text({ adapters: listAdapters() }));
     server.tool("tartarus_refresh", "Probe PATH + versions.", {}, async () => text({ harnesses: refreshHarnesses() }));
     server.tool("tartarus_list_harnesses", "List registered harnesses.", {}, async () => text({ harnesses: store.listHarnesses() }));
@@ -52,6 +71,8 @@ Tartarus never auto-picks a winner.`));
             "gemini",
             "grok",
             "glm",
+            "pi",
+            "zero",
             "custom",
         ]),
         command: z.string(),
@@ -68,18 +89,36 @@ Tartarus never auto-picks a winner.`));
         store.setEnvCopy(files);
         return text({ envCopy: files });
     });
-    server.tool("tartarus_worktree_create", "Create isolated git worktree + env copy.", {
+    server.tool("tartarus_set_dna", "Project DNA: setup hooks, guide files, autoSetup after worktree create.", {
+        setup: z
+            .array(z.string())
+            .optional()
+            .describe('e.g. ["pnpm install", "pnpm build"]'),
+        envCopy: z.array(z.string()).optional(),
+        guideFiles: z.array(z.string()).optional(),
+        autoSetup: z.boolean().optional(),
+        portsBase: z.number().optional(),
+    }, async (a) => text({ dna: setProjectDna(a) }));
+    server.tool("tartarus_worktree_create", "Create isolated git worktree + env + optional setup.", {
         branch: z.string(),
         repo: z.string().optional(),
+        runSetup: z.boolean().optional(),
     }, async (a) => text(createWorktree(a)));
     server.tool("tartarus_worktree_remove", "Remove a worktree path.", {
         path: z.string(),
         force: z.boolean().optional(),
     }, async (a) => text(removeWorktree(a)));
     server.tool("tartarus_worktree_list", "List Tartarus worktrees.", {}, async () => text({ worktrees: listWorktrees() }));
-    server.tool("tartarus_preview_run", "Dry-run exact spawn argv.", {
+    server.tool("tartarus_preview_context", "Preview the brief that would be sent to a worker (no spawn).", {
+        prompt: z.string(),
+        context: contextSchema,
+        harnessId: z.string().optional(),
+        cwd: z.string().optional(),
+    }, async (a) => text(previewContext(a)));
+    server.tool("tartarus_preview_run", "Dry-run exact spawn argv (after context packaging).", {
         harnessId: z.string(),
         prompt: z.string(),
+        context: contextSchema,
         cwd: z.string().optional(),
         model: z.string().optional(),
         safer: z.boolean().optional(),
@@ -88,8 +127,14 @@ Tartarus never auto-picks a winner.`));
         if (!h)
             return text({ error: `unknown harness: ${a.harnessId}` });
         const cwd = a.cwd ?? store.state.projectRoot ?? process.cwd();
-        const built = buildRun(h.kind, {
+        const preview = previewContext({
             prompt: a.prompt,
+            context: a.context,
+            harnessId: a.harnessId,
+            cwd,
+        });
+        const built = buildRun(h.kind, {
+            prompt: preview.adapterPromptPreview,
             cwd,
             baseArgs: h.args,
             model: a.model ?? h.model,
@@ -101,18 +146,24 @@ Tartarus never auto-picks a winner.`));
             commandLine: formatCommandLine(h.command, built.args),
             summary: built.summary,
             cwd,
-            env: built.env,
+            contextPreview: {
+                guidesFound: preview.guidesFound,
+                filesIncluded: preview.filesIncluded,
+                briefChars: preview.brief.length,
+            },
         });
     });
-    server.tool("tartarus_run", "Spawn ONE harness unattended. YOU orchestrate next steps.", {
+    server.tool("tartarus_run", "Spawn ONE harness with full context pack. YOU orchestrate next steps.", {
         harnessId: z.string(),
         prompt: z.string(),
+        context: contextSchema,
         cwd: z.string().optional(),
         worktreeBranch: z.string().optional(),
         tag: z.string().optional(),
         timeoutMs: z.number().optional(),
         model: z.string().optional(),
         safer: z.boolean().optional(),
+        runSetup: z.boolean().optional(),
     }, async (a) => {
         try {
             return text({ job: runOnHarness(a) });
@@ -121,33 +172,41 @@ Tartarus never auto-picks a winner.`));
             return text({ error: e instanceof Error ? e.message : String(e) });
         }
     });
-    server.tool("tartarus_fanout", "Spawn same prompt on many harnesses. No auto-winner.", {
+    server.tool("tartarus_fanout", "Spawn same context pack on many harnesses. No auto-winner.", {
         prompt: z.string(),
+        context: contextSchema,
         harnessIds: z.array(z.string()).min(1),
         useWorktrees: z.boolean().optional().default(true),
         tag: z.string().optional(),
         timeoutMs: z.number().optional(),
         model: z.string().optional(),
         safer: z.boolean().optional(),
+        runSetup: z.boolean().optional(),
     }, async (a) => {
         try {
             const result = fanout(a);
             return text({
                 ...result,
-                message: "Fan-out started. Use tartarus_wait / tartarus_inspect_jobs. YOU pick the winner.",
+                message: "Fan-out started. wait → inspect_jobs / handoff. YOU pick the winner.",
             });
         }
         catch (e) {
             return text({ error: e instanceof Error ? e.message : String(e) });
         }
     });
-    server.tool("tartarus_job", "Job status + in-memory log tail + commandLine.", { jobId: z.string() }, async ({ jobId }) => {
+    server.tool("tartarus_job", "Job status + brief path + summary if finished.", { jobId: z.string() }, async ({ jobId }) => {
         const job = store.getJob(jobId);
         return job ? text({ job }) : text({ error: "job not found" });
     });
+    server.tool("tartarus_handoff", "Handoff summary for next agent (markdown + metrics).", { jobId: z.string() }, async ({ jobId }) => {
+        const h = getJobHandoff(jobId);
+        return h
+            ? text({ handoff: h })
+            : text({ error: "job not found" });
+    });
     server.tool("tartarus_logs", "Full job log from disk (durable).", {
         jobId: z.string(),
-        tail: z.number().optional().describe("Max chars from end (default 20000)"),
+        tail: z.number().optional(),
     }, async ({ jobId, tail }) => text(getJobLog(jobId, tail ?? 20_000)));
     server.tool("tartarus_jobs", "List jobs with optional filters.", {
         limit: z.number().optional(),
@@ -157,29 +216,30 @@ Tartarus never auto-picks a winner.`));
             .optional(),
         harnessId: z.string().optional(),
     }, async (a) => text({ jobs: listJobsFiltered(a) }));
-    server.tool("tartarus_wait", "Block until job finishes (or timeout). Convenience for the orchestrator.", {
+    server.tool("tartarus_wait", "Block until job finishes. Returns job + handoff summary.", {
         jobId: z.string(),
         timeoutMs: z.number().optional(),
     }, async ({ jobId, timeoutMs }) => {
         try {
             const job = await waitForJob(jobId, timeoutMs ?? 60 * 60_000);
-            return text({ job });
+            const handoff = getJobHandoff(jobId);
+            return text({ job, handoff });
         }
         catch (e) {
             return text({ error: e instanceof Error ? e.message : String(e) });
         }
     });
-    server.tool("tartarus_inspect", "Git facts for a path/worktree: status, diffstat, patch preview. No ranking.", {
+    server.tool("tartarus_inspect", "Git facts for a path/worktree.", {
         path: z.string(),
         patchLimit: z.number().optional(),
     }, async ({ path, patchLimit }) => text(inspectPath(path, { patchLimit })));
-    server.tool("tartarus_inspect_jobs", "Git facts for jobs (by tag or ids) so YOU can compare and pick a winner.", {
+    server.tool("tartarus_inspect_jobs", "Git facts for jobs so YOU can compare and pick a winner.", {
         tag: z.string().optional(),
         jobIds: z.array(z.string()).optional(),
     }, async (a) => text(inspectJobs(a)));
     server.tool("tartarus_kill", "Kill one job.", { jobId: z.string() }, async ({ jobId }) => text({ killed: killJob(jobId) }));
     server.tool("tartarus_kill_tag", "Kill all running jobs with a tag.", { tag: z.string() }, async ({ tag }) => text(killByTag(tag)));
-    server.tool("tartarus_cleanup_tag", "Kill running jobs with tag + remove their worktrees. YOU call this on losers.", {
+    server.tool("tartarus_cleanup_tag", "Kill + remove worktrees for a tag (losers).", {
         tag: z.string(),
         killRunning: z.boolean().optional(),
         removeWorktrees: z.boolean().optional(),

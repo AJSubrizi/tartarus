@@ -3,14 +3,32 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { DEFAULT_HARNESSES } from "./harnesses.js";
 const STATE_PATH = process.env.TARTARUS_STATE ?? join(homedir(), ".tartarus", "state.json");
+function defaultDna() {
+    return {
+        setup: [],
+        envCopy: [".env", ".env.local", ".env.development.local"],
+        guideFiles: [
+            "AGENTS.md",
+            "CLAUDE.md",
+            "ZERO.md",
+            ".zero/AGENTS.md",
+            "PRODUCT.md",
+            "CONTRIBUTING.md",
+            "README.md",
+        ],
+        portsBase: 4100,
+        autoSetup: false,
+    };
+}
 function empty() {
     return {
-        version: 3,
+        version: 4,
         harnesses: DEFAULT_HARNESSES.map((h) => ({ ...h })),
         jobs: [],
         projectRoot: process.cwd(),
-        envCopy: [".env", ".env.local", ".env.development.local"],
+        envCopy: defaultDna().envCopy,
         defaultTimeoutMs: 30 * 60_000,
+        dna: defaultDna(),
     };
 }
 function migrate(raw) {
@@ -22,6 +40,7 @@ function migrate(raw) {
         ? p.harnesses
         : base.harnesses;
     const jobs = Array.isArray(p.jobs) ? p.jobs : [];
+    const dnaRaw = p.dna ?? {};
     return {
         ...base,
         harnesses,
@@ -32,10 +51,11 @@ function migrate(raw) {
         projectRoot: p.projectRoot ?? base.projectRoot,
         envCopy: Array.isArray(p.envCopy)
             ? p.envCopy
-            : p.dna?.envCopy ?? base.envCopy,
+            : dnaRaw.envCopy ?? base.envCopy,
         defaultTimeoutMs: typeof p.defaultTimeoutMs === "number"
             ? p.defaultTimeoutMs
             : base.defaultTimeoutMs,
+        dna: { ...defaultDna(), ...dnaRaw },
     };
 }
 export function loadState() {
@@ -110,7 +130,15 @@ export class Store {
     }
     setEnvCopy(files) {
         this.state.envCopy = files;
+        this.state.dna = { ...this.state.dna, envCopy: files };
         this.persist();
+    }
+    setDna(dna) {
+        this.state.dna = { ...this.state.dna, ...dna };
+        if (dna.envCopy)
+            this.state.envCopy = dna.envCopy;
+        this.persist();
+        return this.state.dna;
     }
 }
 export const store = new Store();

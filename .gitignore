@@ -11,3 +11,5 @@ data/
 .tartarus-smoke-ok
 *.tsbuildinfo
 .vite
+release/
+.electron-builder/

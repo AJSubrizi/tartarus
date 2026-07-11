@@ -41,19 +41,34 @@ export function renderUiHtml(opts: {
         var(--void);
     }
     .app { max-width: 720px; margin: 0 auto; padding: 36px 20px 64px; }
-    header { text-align: center; margin-bottom: 32px; }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
     .mark {
-      width: 44px; height: 44px; margin: 0 auto 14px; border-radius: 12px;
+      width: 44px; height: 44px; margin: 0 0 14px; border-radius: 12px;
       border: 1px solid rgba(255,77,46,0.4); background: #0a0a0e;
       display: grid; place-items: center;
       box-shadow: 0 0 28px rgba(255,77,46,0.25);
     }
     h1 {
-      margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.16em;
-      text-indent: 0.16em;
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-align: center;
+      /* letter-spacing adds space after last glyph — cancel it so title stays optically centered */
+      margin-inline-end: -0.18em;
+      width: max-content;
+      max-width: 100%;
     }
     .tagline {
       margin: 10px 0 0; color: var(--dim); font-size: 14px; line-height: 1.5;
+      text-align: center;
+      max-width: 28rem;
     }
     .tagline em { font-style: normal; color: var(--ember); }
     .steps {
@@ -158,7 +173,7 @@ export function renderUiHtml(opts: {
         <button type="button" class="ghost sm" id="btn-refresh">Rileva di nuovo</button>
       </div>
       <h2>I tuoi agent / abbonamenti</h2>
-      <p class="hint">CLI già installati sul Mac (Claude, Codex, Cursor, OpenCode, Grok, GLM…). Non servono API key a Tartarus — usi i piani che paghi già.</p>
+      <p class="hint">CLI già installati (Claude, Codex, Cursor, Pi, Zero, OpenCode, Grok, GLM…). Non servono API key a Tartarus — usi i piani che paghi già.</p>
       <div class="list" id="harnesses"></div>
     </section>
 

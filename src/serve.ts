@@ -39,7 +39,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 export function startHttpServer(
   port = Number(process.env.PORT ?? 7340),
   opts?: { open?: boolean },
-): void {
+): Promise<{ port: number; url: string }> {
   refreshHarnesses();
 
   const server = createServer(async (req, res) => {
@@ -170,9 +170,11 @@ export function startHttpServer(
     }
   });
 
-  server.listen(port, "127.0.0.1", () => {
-    const url = `http://127.0.0.1:${port}`;
-    console.log(`
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      const url = `http://127.0.0.1:${port}`;
+      console.log(`
   TARTARUS
 
   Open  ${url}
@@ -182,9 +184,11 @@ export function startHttpServer(
 
   state ${statePath()}
 `);
-    if (opts?.open !== false && process.env.TARTARUS_NO_OPEN !== "1") {
-      openBrowser(url);
-    }
+      if (opts?.open !== false && process.env.TARTARUS_NO_OPEN !== "1") {
+        openBrowser(url);
+      }
+      resolve({ port, url });
+    });
   });
 }
 

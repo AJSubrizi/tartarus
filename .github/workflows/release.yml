@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create/publish (e.g. v0.7.0)"
+        required: true
+        default: "v0.7.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Smoke
+        run: pnpm smoke
+
+      - name: Package Electron (mac)
+        if: matrix.platform == 'mac'
+        run: pnpm exec electron-builder --mac dir --publish never
+
+      - name: Package Electron (linux)
+        if: matrix.platform == 'linux'
+        run: pnpm exec electron-builder --linux AppImage --publish never
+        continue-on-error: true
+
+      - name: Zip mac app
+        if: matrix.platform == 'mac'
+        run: |
+          cd release
+          if [ -d mac-arm64/Tartarus.app ]; then
+            ditto -c -k --sequesterRsrc --keepParent mac-arm64/Tartarus.app Tartarus-mac-arm64.zip
+          fi
+          if [ -d mac/Tartarus.app ]; then
+            ditto -c -k --sequesterRsrc --keepParent mac/Tartarus.app Tartarus-mac-x64.zip
+          fi
+          ls -la
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tartarus-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            release/**/*.zip
+            release/**/*.AppImage
+            release/**/*.dmg
+            dist/**
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare files
+        run: |
+          mkdir -p out
+          find artifacts -type f \( -name '*.zip' -o -name '*.AppImage' -o -name '*.dmg' \) -exec cp {} out/ \;
+          ls -laR artifacts out || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Tartarus ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            out/*
+          body: |
+            ## Tartarus ${{ github.event.inputs.tag || github.ref_name }}
+
+            **The harness for the harnesses.**
+
+            ### Install app (Mac)
+            Download `Tartarus-mac-arm64.zip`, unzip, open `Tartarus.app`.
+
+            ### MCP (any host)
+            ```bash
+            codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp
+            ```
+            Or open the app → **Installa MCP** on Claude / Codex / Cursor.
+
+            ### Context
+            `run` / `fanout` accept a structured `context` pack (goal, constraints, files, handoff).
+            Brief is written to `.tartarus/brief-<job>.md` in the worker workspace.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

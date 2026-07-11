@@ -1,4 +1,4 @@
-import type { Harness, Job, TartarusState } from "./types.js";
+import type { Harness, Job, ProjectDna, TartarusState } from "./types.js";
 export declare function loadState(): TartarusState;
 export declare function saveState(state: TartarusState): void;
 export declare function statePath(): string;
@@ -16,5 +16,6 @@ export declare class Store {
     listJobs(limit?: number): Job[];
     setProjectRoot(path: string): void;
     setEnvCopy(files: string[]): void;
+    setDna(dna: Partial<ProjectDna>): ProjectDna;
 }
 export declare const store: Store;

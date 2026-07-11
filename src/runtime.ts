@@ -6,6 +6,7 @@ import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { store } from "./state.js";
 import {
+  DEFAULT_HARNESSES,
   buildRun,
   formatCommandLine,
   probeAll,
@@ -22,9 +23,17 @@ import {
   readJobLog,
   writeJobLogHeader,
 } from "./logs.js";
+import {
+  buildHandoffSummary,
+  materializeContextFiles,
+  mergeContext,
+  promptForAdapter,
+  renderBrief,
+  writeBriefFile,
+} from "./context.js";
 import { bus } from "./bus.js";
 import { uid } from "./id.js";
-import type { Harness, Job, JobStatus } from "./types.js";
+import type { ContextPack, Harness, Job, JobStatus, ProjectDna } from "./types.js";
 
 const active = new Map<
   string,
@@ -104,7 +113,30 @@ function notifyWaiters(jobId: string): void {
 
 // ── harness registry ───────────────────────────────────────
 
+const SMOKE_HARNESS_IDS = new Set(["smoke", "smoke-b", "sleeper"]);
+
+function isSmokeHarness(h: Harness): boolean {
+  if (SMOKE_HARNESS_IDS.has(h.id)) return true;
+  const cmd = h.command ?? "";
+  const label = h.label ?? "";
+  return (
+    cmd.includes("smoke-worker") ||
+    /^smoke\b/i.test(label) ||
+    label === "Sleeper"
+  );
+}
+
 export function refreshHarnesses(): Harness[] {
+  // Drop leftover smoke-test harnesses from older smoke runs
+  for (const h of store.listHarnesses()) {
+    if (isSmokeHarness(h)) store.removeHarness(h.id);
+  }
+  // Ensure newly added default harnesses (pi, zero, …) appear even on old state
+  for (const def of DEFAULT_HARNESSES) {
+    if (!store.getHarness(def.id)) {
+      store.upsertHarness({ ...def });
+    }
+  }
   const next = probeAll(store.listHarnesses());
   for (const h of next) store.upsertHarness(h);
   return store.listHarnesses();
@@ -145,17 +177,34 @@ export function listAdapters() {
 export { createWorktree, removeWorktree, listWorktrees };
 export { inspectPath, inspectMany };
 
+function finalizeJob(jobId: string, harnessId: string): void {
+  const j = store.getJob(jobId);
+  if (!j) return;
+  try {
+    const summary = buildHandoffSummary(j);
+    store.updateJob(jobId, { summary });
+  } catch {
+    /* ignore */
+  }
+  releaseHarness(harnessId);
+  notifyWaiters(jobId);
+}
+
 // ── spawn primitive ────────────────────────────────────────
 
 export function runOnHarness(input: {
   harnessId: string;
   prompt: string;
+  /** Structured context (preferred). Merged with prompt. */
+  context?: ContextPack;
   cwd?: string;
   worktreeBranch?: string;
   tag?: string;
   timeoutMs?: number;
   model?: string;
   safer?: boolean;
+  /** Run dna.setup after worktree create */
+  runSetup?: boolean;
 }): Job {
   const harness = store.getHarness(input.harnessId);
   if (!harness) throw new Error(`unknown harness: ${input.harnessId}`);
@@ -166,24 +215,51 @@ export function runOnHarness(input: {
     throw new Error(probed.lastError ?? "harness missing");
   }
 
-  let cwd = resolve(input.cwd ?? store.state.projectRoot ?? process.cwd());
+  const root = resolve(input.cwd ?? store.state.projectRoot ?? process.cwd());
+  let cwd = root;
   let worktree: string | undefined;
   let branch = input.worktreeBranch;
+  let setupRan: string[] | undefined;
 
-  if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
-    throw new Error(`cwd does not exist or is not a directory: ${cwd}`);
+  if (!existsSync(root) || !statSync(root).isDirectory()) {
+    throw new Error(`cwd does not exist or is not a directory: ${root}`);
   }
 
   if (branch) {
-    const wt = createWorktree({ repo: cwd, branch });
+    const wt = createWorktree({
+      repo: root,
+      branch,
+      runSetup: input.runSetup,
+    });
     if (!wt.ok || !wt.path) throw new Error(wt.error ?? "worktree failed");
     cwd = wt.path;
     worktree = wt.path;
     branch = wt.branch ?? branch;
+    setupRan = wt.setupRan;
   }
 
+  const jobId = uid("job");
+  const { goal, context } = mergeContext(input.prompt, input.context);
+
+  // Materialize untracked context files into worktree
+  if (worktree && context.files?.length) {
+    materializeContextFiles(root, worktree, context.files);
+  }
+
+  const builtCtx = renderBrief({
+    goal,
+    root,
+    worktree,
+    context,
+    harnessId: harness.id,
+    jobId,
+    tag: input.tag,
+  });
+  const briefPath = writeBriefFile(builtCtx.brief, cwd, jobId);
+  const adapterPrompt = promptForAdapter(briefPath, goal);
+
   const built = buildRun(harness.kind, {
-    prompt: input.prompt,
+    prompt: adapterPrompt,
     cwd,
     baseArgs: harness.args,
     model: input.model ?? harness.model,
@@ -192,13 +268,16 @@ export function runOnHarness(input: {
 
   const command = probed.command;
   const commandLine = formatCommandLine(command, built.args);
-  const jobId = uid("job");
 
   const header =
     `[tartarus] job=${jobId}\n` +
     `[tartarus] harness=${harness.id} kind=${harness.kind}\n` +
     `[tartarus] spawn: ${built.summary}\n` +
     `[tartarus] cwd: ${cwd}\n` +
+    `[tartarus] brief: ${briefPath}\n` +
+    `[tartarus] guides: ${builtCtx.guidesFound.join(", ") || "(none)"}\n` +
+    `[tartarus] files: ${builtCtx.filesIncluded.join(", ") || "(none)"}\n` +
+    (setupRan?.length ? `[tartarus] setup: ${setupRan.join(" && ")}\n` : "") +
     `[tartarus] cmd: ${commandLine}\n` +
     `[tartarus] started: ${new Date().toISOString()}\n\n`;
 
@@ -207,7 +286,9 @@ export function runOnHarness(input: {
   const job: Job = {
     id: jobId,
     harnessId: harness.id,
-    prompt: input.prompt,
+    prompt: goal,
+    renderedBrief: builtCtx.brief,
+    context,
     cwd,
     worktree,
     branch,
@@ -220,6 +301,8 @@ export function runOnHarness(input: {
     resolvedCommand: probed.resolvedPath ?? command,
     adapterSummary: built.summary,
     promptFile: built.promptFile,
+    briefPath,
+    setupRan,
   };
   store.addJob(job);
   store.upsertHarness({ ...probed, status: "busy" });
@@ -236,6 +319,7 @@ export function runOnHarness(input: {
     env: {
       TARTARUS_JOB_ID: job.id,
       TARTARUS_LOG: jobLogPath(job.id),
+      TARTARUS_BRIEF: briefPath,
       ...(worktree ? { TARTARUS_WORKTREE: worktree } : {}),
       ...built.env,
     },
@@ -251,8 +335,7 @@ export function runOnHarness(input: {
 
       const cur = store.getJob(job.id);
       if (cur && terminal(cur.status)) {
-        releaseHarness(harness.id);
-        notifyWaiters(job.id);
+        finalizeJob(job.id, harness.id);
         return;
       }
 
@@ -276,8 +359,7 @@ export function runOnHarness(input: {
         logTail: ((j?.logTail ?? "") + footer).slice(-24_000),
       });
       bus.emitEvent({ type: "job", jobId: job.id, status });
-      releaseHarness(harness.id);
-      notifyWaiters(job.id);
+      finalizeJob(job.id, harness.id);
     },
   });
 
@@ -288,9 +370,8 @@ export function runOnHarness(input: {
       finishedAt: Date.now(),
     });
     appendJobLog(job.id, "[tartarus] spawn failed (no pid)\n");
-    releaseHarness(harness.id);
     bus.emitEvent({ type: "job", jobId: job.id, status: "failed" });
-    notifyWaiters(job.id);
+    finalizeJob(job.id, harness.id);
     return store.getJob(job.id)!;
   }
 
@@ -315,8 +396,7 @@ export function runOnHarness(input: {
       logTail: ((j?.logTail ?? "") + footer).slice(-24_000),
     });
     bus.emitEvent({ type: "job", jobId: job.id, status: "timed_out" });
-    releaseHarness(harness.id);
-    notifyWaiters(job.id);
+    finalizeJob(job.id, harness.id);
   }, timeoutMs);
 
   active.set(job.id, { handle, timer, logBuf: "" });
@@ -354,8 +434,7 @@ export function killJob(jobId: string): boolean {
       logTail: (job.logTail ?? "") + footer,
     });
     bus.emitEvent({ type: "job", jobId, status: "killed" });
-    releaseHarness(job.harnessId);
-    notifyWaiters(jobId);
+    finalizeJob(jobId, job.harnessId);
     return true;
   }
   return Boolean(run);
@@ -397,12 +476,14 @@ export function waitForJob(jobId: string, timeoutMs = 60 * 60_000): Promise<Job>
  */
 export function fanout(input: {
   prompt: string;
+  context?: ContextPack;
   harnessIds: string[];
   useWorktrees?: boolean;
   tag?: string;
   timeoutMs?: number;
   model?: string;
   safer?: boolean;
+  runSetup?: boolean;
 }): { tag: string; jobs: Job[]; errors: string[] } {
   const ids = [...new Set(input.harnessIds)];
   if (ids.length < 1) throw new Error("need at least one harness");
@@ -417,6 +498,7 @@ export function fanout(input: {
         runOnHarness({
           harnessId: hid,
           prompt: input.prompt,
+          context: input.context,
           worktreeBranch:
             input.useWorktrees !== false
               ? `tartarus/${tag}-${hid}`
@@ -425,6 +507,7 @@ export function fanout(input: {
           timeoutMs: input.timeoutMs,
           model: input.model,
           safer: input.safer,
+          runSetup: input.runSetup,
         }),
       );
     } catch (e) {
@@ -437,6 +520,46 @@ export function fanout(input: {
   }
 
   return { tag, jobs, errors };
+}
+
+export function setProjectDna(dna: Partial<ProjectDna>): ProjectDna {
+  return store.setDna(dna);
+}
+
+export function getJobHandoff(jobId: string) {
+  const job = store.getJob(jobId);
+  if (!job) return null;
+  const summary = job.summary ?? buildHandoffSummary(job);
+  if (!job.summary) store.updateJob(jobId, { summary });
+  return summary;
+}
+
+/** Preview the brief that would be sent (no spawn). */
+export function previewContext(input: {
+  prompt: string;
+  context?: ContextPack;
+  harnessId?: string;
+  cwd?: string;
+}) {
+  const root = resolve(input.cwd ?? store.state.projectRoot ?? process.cwd());
+  const { goal, context } = mergeContext(input.prompt, input.context);
+  const built = renderBrief({
+    goal,
+    root,
+    context,
+    harnessId: input.harnessId ?? "preview",
+    jobId: "preview",
+  });
+  return {
+    goal,
+    guidesFound: built.guidesFound,
+    filesIncluded: built.filesIncluded,
+    brief: built.brief,
+    adapterPromptPreview: promptForAdapter(
+      ".tartarus/brief-preview.md",
+      goal,
+    ),
+  };
 }
 
 /** Facts for orchestrator to compare fanout results */
@@ -526,11 +649,26 @@ export function listJobsFiltered(opts?: {
 export function snapshot() {
   return {
     role: "primitive_runtime",
-    note: "You (the calling agent) are the orchestrator. Tartarus only spawns and reports.",
+    note: "You orchestrate. Tartarus packages context (brief) + spawns + reports.",
     projectRoot: store.state.projectRoot,
     envCopy: store.state.envCopy,
+    dna: store.state.dna,
     harnesses: store.listHarnesses(),
-    jobs: store.listJobs(40),
+    jobs: store.listJobs(40).map((j) => ({
+      id: j.id,
+      harnessId: j.harnessId,
+      status: j.status,
+      tag: j.tag,
+      briefPath: j.briefPath,
+      worktree: j.worktree,
+      summary: j.summary
+        ? {
+            filesChanged: j.summary.filesChanged,
+            additions: j.summary.additions,
+            deletions: j.summary.deletions,
+          }
+        : undefined,
+    })),
     activeJobIds: [...active.keys()],
     worktrees: listWorktrees(),
     adapters: adapterCatalog(),
