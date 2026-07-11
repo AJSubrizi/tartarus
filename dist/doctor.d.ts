@@ -1,4 +1,4 @@
-export declare const VERSION = "0.7.0";
+export declare const VERSION = "0.7.1";
 export declare function doctorReport(repoRoot?: string): {
     ok: boolean;
     version: string;

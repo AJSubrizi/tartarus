@@ -1,6 +1,6 @@
 {
   "name": "tartarus",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "author": "AJSubrizi",
   "private": false,
   "type": "module",
@@ -28,6 +28,7 @@
     "app": "node dist/cli.js app",
     "desktop": "pnpm build && electron .",
     "desktop:pack": "pnpm build && electron-builder --mac dir --publish never",
+    "desktop:pack:all": "pnpm build && electron-builder -mwl --publish never",
     "desktop:open": "pnpm desktop:pack && open release/mac-arm64/Tartarus.app || open release/mac/Tartarus.app",
     "mcp": "node dist/cli.js mcp",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -73,6 +74,43 @@
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
     },
     "dmg": {
       "title": "Tartarus"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- Multi-platform release builds: **macOS (arm64 + x64)**, **Windows (Setup + portable)**, **Linux (AppImage + deb)**
+- Improved GitHub Actions release matrix
+
 ## 0.7.0
 
 ### Context pack (major)
