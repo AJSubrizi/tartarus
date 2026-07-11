@@ -25,8 +25,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 async function main() {
   switch (cmd) {
-    case "serve": {
-      startHttpServer(Number(rest[0] ?? process.env.PORT ?? 7340));
+    case "serve":
+    case "app":
+    case "gui": {
+      // Main product surface: connect subs → install MCP on hosts
+      const noOpen = rest.includes("--no-open");
+      const portArg = rest.find((a) => /^\d+$/.test(a));
+      startHttpServer(Number(portArg ?? process.env.PORT ?? 7340), {
+        open: !noOpen,
+      });
       break;
     }
     case "mcp": {
@@ -150,18 +157,19 @@ async function main() {
   YOU (Claude / Codex / Cursor) = orchestrator
   Tartarus                      = MCP primitives
 
-Quick setup (like any MCP):
+Easiest:
+  tartarus app                       Open GUI → connect subs → Install MCP
+
+Or CLI one-liner (Codex):
   codex mcp add tartarus -- npx -y ${NPX_PACKAGE} mcp
-  # or:  tartarus setup codex
 
 Usage:
-  tartarus mcp                       MCP stdio (what npx runs)
-  tartarus setup [codex]             Register with Codex / print guide
-  tartarus mcp-config [--local]      Print MCP JSON (default: npx)
-  tartarus doctor                    Health check
-  tartarus serve [port]              Void UI
+  tartarus app | serve [port]        GUI setup (opens browser)
+  tartarus mcp                       MCP stdio server
+  tartarus setup codex               Register MCP on Codex from CLI
+  tartarus mcp-config [--local]      Print MCP JSON
+  tartarus doctor
   tartarus status | refresh | adapters | preview
-  tartarus version
 `);
   }
 }

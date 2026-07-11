@@ -1,6 +1,6 @@
 {
   "name": "tartarus",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": false,
   "type": "module",
   "description": "The harness for the harnesses — MCP so Claude/Codex/Cursor orchestrate other agents",
@@ -22,7 +22,8 @@
     "dev:mcp": "tsx src/cli.ts mcp",
     "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
     "prepare": "node scripts/ensure-build.mjs",
-    "start": "node dist/cli.js serve",
+    "start": "node dist/cli.js app",
+    "app": "node dist/cli.js app",
     "mcp": "node dist/cli.js mcp",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx scripts/smoke.ts",

@@ -4,8 +4,15 @@
 
 ## Thesis
 
+**Product UX**
+
+1. Apri l’app Tartarus (GUI)
+2. Vedi i tuoi abbonamenti/CLI rilevati (Claude, Codex, Cursor, GLM, …)
+3. Click **Installa MCP** su Claude *oppure* Codex *oppure* Cursor
+4. Lavori in quell’app: **lei** orchestra; Tartarus solo esegue
+
 **L’orchestratore è sempre l’harness principale** — Claude Code, Codex, Cursor, …  
-**Tartarus non orchestra.** Espone solo primitive via MCP.
+**Tartarus non orchestra.** Espone solo primitive via MCP + GUI di setup.
 
 ```
 ┌─────────────────────────────┐

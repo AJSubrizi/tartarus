@@ -1,7 +1,6 @@
+/** Setup GUI — connect subscriptions, install MCP on hosts. */
 export declare function renderUiHtml(opts: {
-    harnessesJson: string;
-    jobsJson: string;
-    mcpSnippet: string;
+    bootstrapJson: string;
     port: number;
 }): string;
-export declare function mcpConfigSnippet(_repoRoot: string): string;
+export declare function mcpConfigSnippet(_repoRoot?: string): string;

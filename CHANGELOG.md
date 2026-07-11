@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- **GUI setup app**: open Tartarus → see subscriptions → Install MCP on Claude / Codex / Cursor
+- One-click host install via `claude mcp add` / `codex mcp add` / `~/.cursor/mcp.json`
+- GLM harness slot; `tartarus app` opens browser
+- Product flow matches “download app, connect, install MCP”
+
 ## 0.5.0
 
 - MCP install like other packages: `codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp`

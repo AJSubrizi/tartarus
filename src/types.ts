@@ -11,6 +11,7 @@ export type HarnessId =
   | "opencode"
   | "gemini"
   | "grok"
+  | "glm"
   | "custom";
 
 export type HarnessStatus = "unknown" | "ready" | "missing" | "busy" | "error";

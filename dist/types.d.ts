@@ -3,7 +3,7 @@
  * The orchestrator is always the main harness (Claude / Codex / Cursor / …)
  * calling these primitives over MCP.
  */
-export type HarnessId = "claude" | "codex" | "cursor" | "opencode" | "gemini" | "grok" | "custom";
+export type HarnessId = "claude" | "codex" | "cursor" | "opencode" | "gemini" | "grok" | "glm" | "custom";
 export type HarnessStatus = "unknown" | "ready" | "missing" | "busy" | "error";
 export type JobStatus = "queued" | "running" | "done" | "failed" | "killed" | "timed_out";
 export interface Harness {

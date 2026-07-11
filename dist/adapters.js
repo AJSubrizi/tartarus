@@ -200,6 +200,20 @@ const grok = {
         };
     },
 };
+const glm = {
+    kind: "glm",
+    binaries: ["glm", "zcode", "zai"],
+    label: "GLM / Zhipu",
+    versionArgs: ["--version"],
+    notes: "Best-effort headless; connect custom binary if CLI name differs.",
+    build(input) {
+        return {
+            args: [...input.baseArgs, "-p", input.prompt, "--yes"],
+            env: {},
+            summary: `glm -p … --yes`,
+        };
+    },
+};
 const custom = {
     kind: "custom",
     binaries: [],
@@ -221,6 +235,7 @@ export const ADAPTERS = {
     opencode,
     gemini,
     grok,
+    glm,
     custom,
 };
 export function resolveBinary(kind, preferredCommand) {

@@ -1,96 +1,156 @@
-import { createServer } from "node:http";
+import { createServer, } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { spawn } from "node:child_process";
 import { store, statePath } from "./state.js";
 import { getJobLog, inspectJobs, listJobsFiltered, refreshHarnesses, snapshot, } from "./runtime.js";
-import { mcpConfigSnippet, renderUiHtml } from "./ui.js";
+import { renderUiHtml } from "./ui.js";
 import { onBus } from "./bus.js";
+import { dashboardState, installHostMcp, listHosts, uninstallHostMcp, } from "./hosts.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
-export function startHttpServer(port = Number(process.env.PORT ?? 7340)) {
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on("data", (c) => chunks.push(c));
+        req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        req.on("error", reject);
+    });
+}
+export function startHttpServer(port = Number(process.env.PORT ?? 7340), opts) {
     refreshHarnesses();
     const server = createServer(async (req, res) => {
         const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
-        if (url.pathname === "/api/state" && req.method === "GET") {
-            return json(res, {
-                harnesses: store.listHarnesses(),
-                jobs: listJobsFiltered({ limit: 30 }),
-                projectRoot: store.state.projectRoot,
-                statePath: statePath(),
-                role: "You orchestrate. Tartarus only runs primitives.",
-            });
-        }
-        if (url.pathname === "/api/refresh" && req.method === "POST") {
-            refreshHarnesses();
-            return json(res, {
-                harnesses: store.listHarnesses(),
-                jobs: listJobsFiltered({ limit: 30 }),
-            });
-        }
-        if (url.pathname === "/api/snapshot" && req.method === "GET") {
-            return json(res, snapshot());
-        }
-        if (url.pathname === "/api/jobs" && req.method === "GET") {
-            return json(res, {
-                jobs: listJobsFiltered({
-                    limit: Number(url.searchParams.get("limit") ?? 40),
-                    tag: url.searchParams.get("tag") ?? undefined,
-                    status: url.searchParams.get("status") ?? undefined,
-                }),
-            });
-        }
-        if (url.pathname.startsWith("/api/jobs/") && req.method === "GET") {
-            const jobId = url.pathname.split("/")[3];
-            if (url.pathname.endsWith("/log")) {
-                return json(res, getJobLog(jobId, Number(url.searchParams.get("tail") ?? 20_000)));
+        try {
+            if (url.pathname === "/api/dashboard" && req.method === "GET") {
+                return json(res, {
+                    harnesses: store.listHarnesses(),
+                    ...dashboardState(),
+                    projectRoot: store.state.projectRoot,
+                    statePath: statePath(),
+                });
             }
-            const job = store.getJob(jobId);
-            if (!job) {
-                res.writeHead(404);
-                res.end("not found");
+            if (url.pathname === "/api/state" && req.method === "GET") {
+                return json(res, {
+                    harnesses: store.listHarnesses(),
+                    hosts: listHosts(),
+                    jobs: listJobsFiltered({ limit: 30 }),
+                    projectRoot: store.state.projectRoot,
+                    statePath: statePath(),
+                });
+            }
+            if (url.pathname === "/api/refresh" && req.method === "POST") {
+                refreshHarnesses();
+                return json(res, {
+                    harnesses: store.listHarnesses(),
+                    hosts: listHosts(),
+                });
+            }
+            if (url.pathname === "/api/hosts" && req.method === "GET") {
+                return json(res, { hosts: listHosts() });
+            }
+            if (url.pathname === "/api/hosts/install" && req.method === "POST") {
+                const body = JSON.parse((await readBody(req)) || "{}");
+                if (!body.host) {
+                    return json(res, { ok: false, message: "host required" }, 400);
+                }
+                const result = installHostMcp(body.host, {
+                    preferLocal: body.preferLocal !== false,
+                });
+                return json(res, { ...result, hosts: listHosts() });
+            }
+            if (url.pathname === "/api/hosts/uninstall" && req.method === "POST") {
+                const body = JSON.parse((await readBody(req)) || "{}");
+                if (!body.host) {
+                    return json(res, { ok: false, message: "host required" }, 400);
+                }
+                const result = uninstallHostMcp(body.host);
+                return json(res, { ...result, hosts: listHosts() });
+            }
+            if (url.pathname === "/api/snapshot" && req.method === "GET") {
+                return json(res, snapshot());
+            }
+            if (url.pathname === "/api/jobs" && req.method === "GET") {
+                return json(res, {
+                    jobs: listJobsFiltered({
+                        limit: Number(url.searchParams.get("limit") ?? 40),
+                        tag: url.searchParams.get("tag") ?? undefined,
+                        status: url.searchParams.get("status") ?? undefined,
+                    }),
+                });
+            }
+            if (url.pathname.startsWith("/api/jobs/") && req.method === "GET") {
+                const jobId = url.pathname.split("/")[3];
+                if (url.pathname.endsWith("/log")) {
+                    return json(res, getJobLog(jobId, Number(url.searchParams.get("tail") ?? 20_000)));
+                }
+                const job = store.getJob(jobId);
+                if (!job) {
+                    res.writeHead(404);
+                    res.end("not found");
+                    return;
+                }
+                return json(res, { job });
+            }
+            if (url.pathname === "/api/inspect" && req.method === "GET") {
+                const tag = url.searchParams.get("tag") ?? undefined;
+                return json(res, inspectJobs({ tag }));
+            }
+            if (url.pathname === "/api/events" && req.method === "GET") {
+                return sse(req, res);
+            }
+            if (url.pathname === "/" || url.pathname === "/index.html") {
+                const bootstrap = {
+                    harnesses: store.listHarnesses(),
+                    ...dashboardState(),
+                };
+                const html = renderUiHtml({
+                    bootstrapJson: JSON.stringify(bootstrap),
+                    port,
+                });
+                res.writeHead(200, {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Cache-Control": "no-store",
+                });
+                res.end(html);
                 return;
             }
-            return json(res, { job });
+            res.writeHead(404);
+            res.end("not found");
         }
-        if (url.pathname === "/api/inspect" && req.method === "GET") {
-            const tag = url.searchParams.get("tag") ?? undefined;
-            return json(res, inspectJobs({ tag }));
+        catch (e) {
+            json(res, { ok: false, message: e instanceof Error ? e.message : String(e) }, 500);
         }
-        if (url.pathname === "/api/events" && req.method === "GET") {
-            return sse(req, res);
-        }
-        if (url.pathname === "/" || url.pathname === "/index.html") {
-            const html = renderUiHtml({
-                harnessesJson: JSON.stringify(store.listHarnesses()),
-                jobsJson: JSON.stringify(listJobsFiltered({ limit: 20 })),
-                mcpSnippet: mcpConfigSnippet(REPO_ROOT),
-                port,
-            });
-            res.writeHead(200, {
-                "Content-Type": "text/html; charset=utf-8",
-                "Cache-Control": "no-store",
-            });
-            res.end(html);
-            return;
-        }
-        res.writeHead(404);
-        res.end("not found");
     });
     server.listen(port, "127.0.0.1", () => {
+        const url = `http://127.0.0.1:${port}`;
         console.log(`
-  TARTARUS — the harness for the harnesses
+  TARTARUS
 
-  UI    http://127.0.0.1:${port}
-  MCP   node dist/cli.js mcp
+  Open  ${url}
+  1. Collega abbonamenti (rilevati automaticamente)
+  2. Installa MCP su Claude / Codex / Cursor
+  3. Apri quell'app e orchestra da lì
+
   state ${statePath()}
-
-  Orchestrator = your main agent (Claude / Codex / Cursor).
-  Tartarus     = primitives only.
 `);
+        if (opts?.open !== false && process.env.TARTARUS_NO_OPEN !== "1") {
+            openBrowser(url);
+        }
     });
 }
-function json(res, data) {
-    res.writeHead(200, { "Content-Type": "application/json" });
+function openBrowser(url) {
+    const plat = process.platform;
+    const cmd = plat === "darwin" ? "open" : plat === "win32" ? "start" : "xdg-open";
+    try {
+        spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
+    }
+    catch {
+        /* ignore */
+    }
+}
+function json(res, data, status = 200) {
+    res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(data));
 }
 function sse(req, res) {

@@ -51,6 +51,7 @@ Tartarus never auto-picks a winner.`));
             "opencode",
             "gemini",
             "grok",
+            "glm",
             "custom",
         ]),
         command: z.string(),
