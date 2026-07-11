@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="420" viewBox="0 0 1440 420" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050506"/>
+      <stop offset="0.55" stop-color="#0c0a0e"/>
+      <stop offset="1" stop-color="#12080a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(720 80) rotate(90) scale(280 520)">
+      <stop stop-color="#ff4d2e" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ff4d2e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ember" x1="520" y1="140" x2="920" y2="280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff7a5c"/>
+      <stop offset="1" stop-color="#ff4d2e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="420" fill="url(#bg)"/>
+  <rect width="1440" height="420" fill="url(#glow)"/>
+  <!-- subtle grid -->
+  <g opacity="0.06" stroke="#ffffff" stroke-width="1">
+    <path d="M0 105 H1440 M0 210 H1440 M0 315 H1440"/>
+    <path d="M240 0 V420 M480 0 V420 M720 0 V420 M960 0 V420 M1200 0 V420"/>
+  </g>
+  <!-- mark -->
+  <g transform="translate(668 48)">
+    <path d="M12 96 L52 12 L92 96 Z" stroke="url(#ember)" stroke-width="4" fill="none"/>
+    <circle cx="52" cy="72" r="8" fill="#ff4d2e"/>
+  </g>
+  <text x="720" y="210" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="72" font-weight="800" letter-spacing="18" fill="#f2f0eb">TARTARUS</text>
+  <text x="720" y="262" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="4" fill="#8b8796">THE HARNESS FOR THE HARNESSES</text>
+  <text x="720" y="310" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" letter-spacing="2" fill="#ff4d2e">you orchestrate · we only run</text>
+</svg>

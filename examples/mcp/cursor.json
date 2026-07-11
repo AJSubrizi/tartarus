@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tartarus": {
+      "command": "node",
+      "args": ["__TARTARUS_CLI__", "mcp"]
+    }
+  }
+}
