@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- Fix Linux `.deb` build (author email + maintainer)
+- Cross-platform smoke worker (Node) so Windows CI can package
+- Multi-platform release: mac / win / linux
+
 ## 0.7.1
 
 - Multi-platform release builds: **macOS (arm64 + x64)**, **Windows (Setup + portable)**, **Linux (AppImage + deb)**

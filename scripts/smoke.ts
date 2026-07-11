@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT = join(__dirname, "..");
-const WORKER = join(__dirname, "smoke-worker.sh");
+/** Cross-platform smoke harness (node script — works on Windows too) */
+const WORKER = join(__dirname, "smoke-worker.mjs");
+const SLEEPER = join(__dirname, "smoke-sleeper.mjs");
+const NODE = process.execPath;
 
 // Isolate state BEFORE loading runtime/store
 const SMOKE_DIR = mkdtempSync(join(tmpdir(), "tartarus-smoke-state-"));
@@ -77,8 +80,8 @@ async function main() {
   console.log("Tartarus smoke — primitives only, no LLM APIs\n");
   console.log("· isolated state", process.env.TARTARUS_STATE);
 
-  spawnSync("chmod", ["+x", WORKER]);
-  assert(existsSync(WORKER), "smoke-worker.sh missing");
+  assert(existsSync(WORKER), "smoke-worker.mjs missing");
+  assert(existsSync(SLEEPER), "smoke-sleeper.mjs missing");
 
   const playground = makeTempGitRepo();
   console.log("✓ temp playground", playground);
@@ -128,8 +131,8 @@ async function main() {
       id: "smoke",
       kind: "custom",
       label: "Smoke Worker",
-      command: WORKER,
-      args: [],
+      command: NODE,
+      args: [WORKER],
     });
     if (fake.status === "missing") {
       store.upsertHarness({ ...fake, status: "ready", lastError: undefined });
@@ -199,8 +202,8 @@ async function main() {
       id: "smoke-b",
       kind: "custom",
       label: "Smoke B",
-      command: WORKER,
-      args: [],
+      command: NODE,
+      args: [WORKER],
     });
     const sb = store.getHarness("smoke-b");
     if (sb?.status === "missing") {
@@ -230,18 +233,12 @@ async function main() {
     console.log("✓ inspect_jobs", board.summary.length, "paths");
 
     // Sleeper ignores brief argv — always sleeps 20s so we can kill it
-    const sleepSh = join(SMOKE_DIR, "sleep20.sh");
-    writeFileSync(
-      sleepSh,
-      "#!/usr/bin/env bash\nsleep 20\necho sleeper-done\n",
-    );
-    spawnSync("chmod", ["+x", sleepSh]);
     connectHarness({
       id: "sleeper",
       kind: "custom",
       label: "Sleeper",
-      command: sleepSh,
-      args: [],
+      command: NODE,
+      args: [SLEEPER],
     });
     const sleeper = store.getHarness("sleeper");
     if (sleeper?.status === "missing") {

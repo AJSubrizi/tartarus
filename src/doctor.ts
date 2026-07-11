@@ -6,7 +6,7 @@ import { listAdapters, listWorktrees, refreshHarnesses } from "./runtime.js";
 import { logDir } from "./logs.js";
 import { NPX_PACKAGE, mcpConfigObject } from "./setup.js";
 
-export const VERSION = "0.7.1";
+export const VERSION = "0.7.2";
 
 export function doctorReport(repoRoot?: string) {
   const root = repoRoot ?? process.cwd();

@@ -1,7 +1,10 @@
 {
   "name": "tartarus",
-  "version": "0.7.1",
-  "author": "AJSubrizi",
+  "version": "0.7.2",
+  "author": {
+    "name": "AJSubrizi",
+    "email": "ajsubrizi@users.noreply.github.com"
+  },
   "private": false,
   "type": "module",
   "description": "The harness for the harnesses — MCP so Claude/Codex/Cursor orchestrate other agents",
@@ -106,7 +109,9 @@
           ]
         }
       ],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "AJSubrizi <ajsubrizi@users.noreply.github.com>",
+      "desktopName": "Tartarus"
     },
     "nsis": {
       "oneClick": true,
