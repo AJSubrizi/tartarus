@@ -57,6 +57,7 @@
   "build": {
     "appId": "dev.tartarus.app",
     "productName": "Tartarus",
+    "executableName": "Tartarus",
     "copyright": "Copyright \u00a9 AJSubrizi",
     "directories": {
       "output": "release",
@@ -65,11 +66,11 @@
     "files": [
       "dist/**/*",
       "desktop/**/*",
-      "package.json",
-      "build/icon.*"
+      "package.json"
     ],
     "extraMetadata": {
-      "main": "desktop/main.cjs"
+      "main": "desktop/main.cjs",
+      "name": "tartarus"
     },
     "mac": {
       "category": "public.app-category.developer-tools",
