@@ -8,10 +8,45 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/AJSubrizi/tartarus/releases/latest"><img src="https://img.shields.io/github/v/release/AJSubrizi/tartarus?label=release" alt="release" /></a>
   <a href="https://github.com/AJSubrizi/tartarus/actions/workflows/ci.yml"><img src="https://github.com/AJSubrizi/tartarus/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-emerald.svg" alt="MIT" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node" /></a>
 </p>
+
+---
+
+## Get the app
+
+**Latest:** [github.com/AJSubrizi/tartarus/releases/latest](https://github.com/AJSubrizi/tartarus/releases/latest)
+
+| Platform | Download |
+|----------|----------|
+| **macOS Apple Silicon** | [Tartarus-mac-arm64.zip](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-mac-arm64.zip) |
+| **macOS Intel** | [Tartarus-mac-x64.zip](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-mac-x64.zip) |
+| **Windows** | [Setup](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-win-x64-Setup.exe) · [portable](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-win-x64-portable.exe) |
+| **Linux** | [AppImage](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-linux-x64.AppImage) · [.deb](https://github.com/AJSubrizi/tartarus/releases/latest/download/Tartarus-linux-x64.deb) |
+
+Builds are **unsigned** — macOS: right-click → **Open**; Windows: SmartScreen may warn.
+
+### One-line install
+
+```bash
+# Desktop app for your OS (default)
+curl -fsSL https://raw.githubusercontent.com/AJSubrizi/tartarus/main/install.sh | bash
+
+# CLI only (clone + build + link to ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/AJSubrizi/tartarus/main/install.sh | bash -s -- --cli
+```
+
+Or from a clone:
+
+```bash
+git clone https://github.com/AJSubrizi/tartarus.git && cd tartarus
+pnpm i && pnpm build
+pnpm start          # setup GUI → http://127.0.0.1:7340
+# pnpm desktop      # Electron window
+```
 
 ---
 
@@ -31,24 +66,6 @@
         TARTARUS              ← detects subs + spawns workers
             │
      Claude · Codex · Cursor · GLM · …
-```
-
----
-
-## Install & open the app
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AJSubrizi/tartarus/main/install.sh | bash
-export PATH="$HOME/.local/bin:$PATH"
-tartarus app
-```
-
-Or from a clone:
-
-```bash
-git clone https://github.com/AJSubrizi/tartarus.git && cd tartarus
-pnpm i && pnpm build
-pnpm start          # opens http://127.0.0.1:7340
 ```
 
 ### In the GUI
@@ -71,15 +88,15 @@ In **Codex** / **Claude** / **Cursor**:
 usa tartarus_help e tartarus_refresh
 ```
 
----
-
-## Optional CLI
+### MCP without the app
 
 ```bash
-tartarus setup codex
 codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp
+# or:  tartarus setup codex
 tartarus doctor
 ```
+
+> **Note:** the npm name `tartarus` is taken by another package. Use the **GitHub** form above (`github:AJSubrizi/tartarus`), not `npx tartarus`.
 
 ---
 
@@ -141,11 +158,30 @@ Tartarus **never** auto-picks a winner.
 
 ---
 
+## Example orchestrator prompt
+
+Paste into Claude / Codex / Cursor after MCP is on:
+
+```text
+You are the orchestrator. Tartarus only spawns workers — you decide.
+
+1. tartarus_help, tartarus_refresh, tartarus_set_project on this repo
+2. tartarus_preview_context with a clear goal + constraints + key files
+3. tartarus_fanout the same brief to 2 harnesses (e.g. codex + cursor) with worktrees
+4. tartarus_wait / tartarus_inspect_jobs — read diffs, pick a winner yourself
+5. tartarus_cleanup_tag on losers; keep or merge the winner
+
+Never invent a winner score. Use git facts only.
+```
+
+---
+
 ## Dev
 
 ```bash
 pnpm install && pnpm typecheck && pnpm smoke && pnpm build
 pnpm start
+pnpm desktop:pack   # mac .app under release/
 ```
 
 [PRODUCT.md](PRODUCT.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [CHANGELOG.md](CHANGELOG.md)

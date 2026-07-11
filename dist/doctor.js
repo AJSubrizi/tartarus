@@ -5,7 +5,7 @@ import { store, statePath } from "./state.js";
 import { listAdapters, listWorktrees, refreshHarnesses } from "./runtime.js";
 import { logDir } from "./logs.js";
 import { NPX_PACKAGE, mcpConfigObject } from "./setup.js";
-export const VERSION = "0.7.1";
+export const VERSION = "0.7.3";
 export function doctorReport(repoRoot) {
     const root = repoRoot ?? process.cwd();
     const nodeMajor = Number(process.versions.node.split(".")[0]);

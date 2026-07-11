@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3
+
+- App icon (macOS `.icns`, Windows `.ico`, Linux PNGs)
+- README: **Get the app** download table + release badge
+- `install.sh`: `--desktop` (default, GitHub Releases) vs `--cli` (clone + build)
+- Orchestrator prompt example in README
+- Note: npm name `tartarus` is taken — use `github:AJSubrizi/tartarus`
+
 ## 0.7.2
 
 - Fix Linux `.deb` build (author email + maintainer)

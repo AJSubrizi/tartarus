@@ -1,6 +1,6 @@
 {
   "name": "tartarus",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "author": {
     "name": "AJSubrizi",
     "email": "ajsubrizi@users.noreply.github.com"
@@ -71,6 +71,7 @@
     },
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
       "target": [
         "dir"
       ],
@@ -79,6 +80,7 @@
       "gatekeeperAssess": false
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -95,6 +97,7 @@
       ]
     },
     "linux": {
+      "icon": "build/icons",
       "target": [
         {
           "target": "AppImage",

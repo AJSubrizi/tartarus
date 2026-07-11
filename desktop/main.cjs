@@ -23,6 +23,13 @@ async function startServer() {
 }
 
 function createWindow() {
+  const iconPath =
+    process.platform === "darwin"
+      ? path.join(ROOT, "build", "icon.icns")
+      : process.platform === "win32"
+        ? path.join(ROOT, "build", "icon.ico")
+        : path.join(ROOT, "build", "icon.png");
+
   mainWindow = new BrowserWindow({
     width: 880,
     height: 920,
@@ -32,6 +39,7 @@ function createWindow() {
     backgroundColor: "#050506",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
