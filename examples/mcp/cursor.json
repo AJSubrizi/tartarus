@@ -2,7 +2,7 @@
   "mcpServers": {
     "tartarus": {
       "command": "npx",
-      "args": ["-y", "github:AJSubrizi/tartarus", "mcp"]
+      "args": ["-y", "@ajsubrizi/tartarus", "mcp"]
     }
   }
 }

@@ -1,4 +1,4 @@
-/** Setup GUI — connect subscriptions, install MCP on hosts. */
+/** Setup GUI — connect subscriptions, install MCP, watch jobs (read-only board). */
 export declare function renderUiHtml(opts: {
     bootstrapJson: string;
     port: number;

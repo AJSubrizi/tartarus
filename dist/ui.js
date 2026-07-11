@@ -1,4 +1,4 @@
-/** Setup GUI — connect subscriptions, install MCP on hosts. */
+/** Setup GUI — connect subscriptions, install MCP, watch jobs (read-only board). */
 export function renderUiHtml(opts) {
     return `<!doctype html>
 <html lang="en">
@@ -24,7 +24,9 @@ export function renderUiHtml(opts) {
       --green: #34d399;
       --green-soft: rgba(52,211,153,0.12);
       --amber: #fbbf24;
+      --amber-soft: rgba(251,191,36,0.12);
       --red: #f87171;
+      --red-soft: rgba(248,113,113,0.12);
       --radius: 14px;
       --font: Syne, system-ui, sans-serif;
       --mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -36,10 +38,10 @@ export function renderUiHtml(opts) {
         radial-gradient(ellipse 70% 40% at 50% -5%, rgba(255,77,46,0.16), transparent 55%),
         var(--void);
     }
-    .app { max-width: 720px; margin: 0 auto; padding: 36px 20px 64px; }
+    .app { max-width: 760px; margin: 0 auto; padding: 36px 20px 80px; }
     header {
       text-align: center;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -56,7 +58,6 @@ export function renderUiHtml(opts) {
       font-weight: 800;
       letter-spacing: 0.18em;
       text-align: center;
-      /* letter-spacing adds space after last glyph — cancel it so title stays optically centered */
       margin-inline-end: -0.18em;
       width: max-content;
       max-width: 100%;
@@ -68,14 +69,14 @@ export function renderUiHtml(opts) {
     }
     .tagline em { font-style: normal; color: var(--ember); }
     .steps {
-      display: flex; gap: 8px; justify-content: center; margin: 22px 0 0;
+      display: flex; gap: 8px; justify-content: center; margin: 22px 0 0; flex-wrap: wrap;
       font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
       text-transform: uppercase; color: var(--faint);
     }
     .steps span { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); }
     .steps span.on { color: var(--ember); border-color: rgba(255,77,46,0.35); background: var(--ember-soft); }
     section {
-      margin-top: 22px; padding: 18px; border-radius: var(--radius);
+      margin-top: 18px; padding: 18px; border-radius: var(--radius);
       border: 1px solid var(--line); background: rgba(14,14,20,0.85);
     }
     section h2 {
@@ -89,21 +90,24 @@ export function renderUiHtml(opts) {
       border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,0.25);
     }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex-shrink: 0; }
-    .dot.ready, .dot.ok { background: var(--green); box-shadow: 0 0 10px rgba(52,211,153,0.45); }
-    .dot.missing, .dot.no { background: var(--red); }
-    .dot.busy { background: var(--ember); animation: pulse 1.2s infinite; }
+    .dot.ready, .dot.ok, .dot.done { background: var(--green); box-shadow: 0 0 10px rgba(52,211,153,0.45); }
+    .dot.missing, .dot.no, .dot.failed, .dot.timed_out { background: var(--red); }
+    .dot.busy, .dot.running, .dot.queued { background: var(--ember); animation: pulse 1.2s infinite; }
+    .dot.killed { background: var(--amber); }
     @keyframes pulse { 50% { opacity: 0.45; } }
     .meta { flex: 1; min-width: 0; text-align: left; }
     .meta strong { display: block; font-size: 14px; font-weight: 700; }
-    .meta small { display: block; margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+    .meta small { display: block; margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--faint); word-break: break-all; }
     .badge {
       font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
       text-transform: uppercase; padding: 4px 8px; border-radius: 999px;
-      border: 1px solid var(--line); color: var(--dim);
+      border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
     }
     .badge.on { color: var(--green); border-color: rgba(52,211,153,0.35); background: var(--green-soft); }
     .badge.off { color: var(--faint); }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge.run { color: var(--ember); border-color: rgba(255,77,46,0.35); background: var(--ember-soft); }
+    .badge.warn { color: var(--amber); border-color: rgba(251,191,36,0.35); background: var(--amber-soft); }
+    .badge.err { color: var(--red); border-color: rgba(248,113,113,0.4); background: var(--red-soft); }
     button {
       font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line2);
       background: rgba(255,255,255,0.03); color: var(--text);
@@ -117,6 +121,7 @@ export function renderUiHtml(opts) {
     }
     button.ghost { color: var(--dim); }
     button.sm { padding: 7px 11px; font-size: 11px; }
+    button.danger { color: var(--red); border-color: rgba(248,113,113,0.35); }
     .host-card {
       padding: 16px; border-radius: 12px; border: 1px solid var(--line);
       background: rgba(0,0,0,0.28); margin-bottom: 10px;
@@ -140,7 +145,23 @@ export function renderUiHtml(opts) {
       font-family: var(--mono);
     }
     footer a { color: var(--dim); }
-    .toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
+    .toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .toolbar .live { margin-right: auto; font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+    .toolbar .live.on { color: var(--green); }
+    .job-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .drawer {
+      margin-top: 10px; border-radius: 12px; border: 1px solid var(--line);
+      background: #0a0a0c; overflow: hidden; display: none;
+    }
+    .drawer.open { display: block; }
+    .drawer pre {
+      margin: 0; padding: 12px; max-height: 240px; overflow: auto;
+      font-family: var(--mono); font-size: 11px; line-height: 1.45; color: var(--dim);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .job-block { margin-bottom: 8px; }
+    .job-block:last-child { margin-bottom: 0; }
+    .ver { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -161,7 +182,9 @@ export function renderUiHtml(opts) {
         <span class="on">1 · Apri</span>
         <span class="on">2 · Collega</span>
         <span class="on">3 · Installa MCP</span>
+        <span class="on">4 · Jobs</span>
       </div>
+      <div class="ver" id="ver"></div>
     </header>
 
     <section>
@@ -169,7 +192,7 @@ export function renderUiHtml(opts) {
         <button type="button" class="ghost sm" id="btn-refresh">Rileva di nuovo</button>
       </div>
       <h2>I tuoi agent / abbonamenti</h2>
-      <p class="hint">CLI già installati (Claude, Codex, Cursor, Pi, Zero, OpenCode, Grok, GLM…). Non servono API key a Tartarus — usi i piani che paghi già.</p>
+      <p class="hint">CLI già installati. Non servono API key a Tartarus — usi i piani che paghi già.</p>
       <div class="list" id="harnesses"></div>
     </section>
 
@@ -177,9 +200,21 @@ export function renderUiHtml(opts) {
       <h2>Installa MCP — scegli dove orchestrare</h2>
       <p class="hint">
         L’orchestratore è l’app in cui lavori (Claude Code, Codex, Cursor).
-        Un click registra Tartarus come MCP lì — come gli altri MCP.
+        Un click registra Tartarus come MCP lì.
       </p>
       <div id="hosts"></div>
+    </section>
+
+    <section>
+      <div class="toolbar">
+        <span class="live" id="live">live off</span>
+        <button type="button" class="ghost sm" id="btn-jobs">Aggiorna jobs</button>
+      </div>
+      <h2>Job board</h2>
+      <p class="hint">
+        Solo osservazione: status, log tail, kill. <em style="color:var(--dim);font-style:normal">Tu</em> scegli il winner (inspect via MCP) — Tartarus non classifica.
+      </p>
+      <div class="list" id="jobs"></div>
     </section>
 
     <section>
@@ -193,12 +228,14 @@ export function renderUiHtml(opts) {
     <footer>
       you orchestrate · we only run ·
       <a href="https://github.com/AJSubrizi/tartarus" target="_blank" rel="noreferrer">GitHub</a>
+      · <span id="update-status"></span>
     </footer>
   </div>
   <div class="toast" id="toast"></div>
 
   <script>
     const bootstrap = ${opts.bootstrapJson};
+    let selectedLog = null;
 
     function toast(msg, ok) {
       const el = document.getElementById('toast');
@@ -212,6 +249,22 @@ export function renderUiHtml(opts) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    function ago(ts) {
+      if (!ts) return '';
+      const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      return Math.floor(s / 3600) + 'h ago';
+    }
+
+    function statusBadge(st) {
+      if (st === 'running' || st === 'queued' || st === 'busy') return 'run';
+      if (st === 'done' || st === 'ready') return 'on';
+      if (st === 'killed') return 'warn';
+      if (st === 'failed' || st === 'timed_out' || st === 'missing') return 'err';
+      return 'off';
+    }
+
     function renderHarnesses(list) {
       const root = document.getElementById('harnesses');
       if (!list.length) {
@@ -220,12 +273,12 @@ export function renderUiHtml(opts) {
       }
       root.innerHTML = list.map(h => \`
         <div class="row">
-          <span class="dot \${h.status}"></span>
+          <span class="dot \${esc(h.status)}"></span>
           <div class="meta">
             <strong>\${esc(h.label)}</strong>
             <small>\${esc(h.command)}\${h.version ? ' · ' + esc(h.version) : ''}\${h.status === 'missing' ? ' · non trovato' : ' · collegato'}</small>
           </div>
-          <span class="badge \${h.status === 'ready' || h.status === 'busy' ? 'on' : 'off'}">\${esc(h.status)}</span>
+          <span class="badge \${statusBadge(h.status)}">\${esc(h.status)}</span>
         </div>
       \`).join('');
     }
@@ -299,9 +352,83 @@ export function renderUiHtml(opts) {
       });
     }
 
+    function renderJobs(jobs) {
+      const root = document.getElementById('jobs');
+      const list = jobs || [];
+      if (!list.length) {
+        root.innerHTML = '<div class="row"><div class="meta"><strong>Nessun job</strong><small>Spawn da MCP: tartarus_run / tartarus_fanout</small></div></div>';
+        return;
+      }
+      root.innerHTML = list.map(j => {
+        const running = j.status === 'running' || j.status === 'queued';
+        const open = selectedLog === j.id;
+        const goal = (j.prompt || '').slice(0, 80);
+        return \`
+          <div class="job-block" data-id="\${esc(j.id)}">
+            <div class="row">
+              <span class="dot \${esc(j.status)}"></span>
+              <div class="meta">
+                <strong>\${esc(j.harnessId)} · \${esc(goal) || esc(j.id)}</strong>
+                <small>\${esc(j.id)}\${j.tag ? ' · tag ' + esc(j.tag) : ''}\${j.worktree ? ' · wt' : ''} · \${ago(j.startedAt)}</small>
+              </div>
+              <span class="badge \${statusBadge(j.status)}">\${esc(j.status)}</span>
+              <div class="job-actions">
+                <button type="button" class="ghost sm btn-log" data-id="\${esc(j.id)}">Log</button>
+                <button type="button" class="danger sm btn-kill" data-id="\${esc(j.id)}" \${running ? '' : 'disabled'}>Kill</button>
+              </div>
+            </div>
+            <div class="drawer \${open ? 'open' : ''}" id="log-\${esc(j.id)}">
+              <pre>\${open ? 'loading…' : ''}</pre>
+            </div>
+          </div>
+        \`;
+      }).join('');
+
+      root.querySelectorAll('.btn-log').forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id;
+          selectedLog = selectedLog === id ? null : id;
+          renderJobs(window.__jobs || list);
+          if (selectedLog) await loadLog(selectedLog);
+        };
+      });
+
+      root.querySelectorAll('.btn-kill').forEach(btn => {
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            const r = await fetch('/api/jobs/' + encodeURIComponent(btn.dataset.id) + '/kill', { method: 'POST' });
+            const data = await r.json();
+            toast(data.ok ? 'Kill inviato' : 'Kill fallito', !!data.ok);
+            await pull();
+          } catch (e) {
+            toast(String(e), false);
+          }
+        };
+      });
+
+      if (selectedLog) loadLog(selectedLog);
+    }
+
+    async function loadLog(id) {
+      const drawer = document.getElementById('log-' + id);
+      if (!drawer) return;
+      const pre = drawer.querySelector('pre');
+      try {
+        const data = await (await fetch('/api/jobs/' + encodeURIComponent(id) + '/log?tail=12000')).json();
+        pre.textContent = data.content || data.logTail || '(empty log)';
+        pre.scrollTop = pre.scrollHeight;
+      } catch (e) {
+        pre.textContent = String(e);
+      }
+    }
+
     function render(data) {
+      document.getElementById('ver').textContent = data.version ? 'v' + data.version : '';
       renderHarnesses(data.harnesses || []);
       renderHosts(data.hosts || []);
+      window.__jobs = data.jobs || [];
+      renderJobs(window.__jobs);
     }
 
     async function pull() {
@@ -316,6 +443,29 @@ export function renderUiHtml(opts) {
       toast('Rilevamento aggiornato', true);
     };
 
+    document.getElementById('btn-jobs').onclick = () => pull();
+
+    // Live board via SSE when jobs change
+    try {
+      const es = new EventSource('/api/events');
+      const live = document.getElementById('live');
+      es.onopen = () => { live.textContent = 'live on'; live.classList.add('on'); };
+      es.onerror = () => { live.textContent = 'live reconnect…'; live.classList.remove('on'); };
+      es.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'job' || msg.type === 'log' || msg.type === 'harness') {
+            pull().catch(() => {});
+          }
+        } catch { /* ignore */ }
+      };
+    } catch {
+      document.getElementById('live').textContent = 'live off';
+    }
+
+    // Poll fallback
+    setInterval(() => { pull().catch(() => {}); }, 4000);
+
     render(bootstrap);
     pull().catch(() => {});
   </script>
@@ -327,7 +477,7 @@ export function mcpConfigSnippet(_repoRoot) {
         mcpServers: {
             tartarus: {
                 command: "npx",
-                args: ["-y", "github:AJSubrizi/tartarus", "mcp"],
+                args: ["-y", "@ajsubrizi/tartarus", "mcp"],
             },
         },
     }, null, 2);

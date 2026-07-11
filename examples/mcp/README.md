@@ -1,29 +1,21 @@
-# MCP setup (same pattern as every other MCP)
-
-## Codex (recommended)
+# MCP examples
 
 ```bash
+# Preferred (scoped npm — after publish)
+codex mcp add tartarus -- npx -y @ajsubrizi/tartarus mcp
+
+# Always works from GitHub
 codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp
+
+# One-shot
+npx -y @ajsubrizi/tartarus setup codex
+npx -y @ajsubrizi/tartarus mcp-config
 ```
 
-Or:
-
-```bash
-npx -y github:AJSubrizi/tartarus setup codex
-```
-
-## Claude Code / Cursor
-
-Use the JSON in this folder, or:
-
-```bash
-npx -y github:AJSubrizi/tartarus mcp-config
-```
-
-## Local checkout (no network on MCP start)
+From a local clone:
 
 ```bash
 pnpm build
-codex mcp add tartarus -- node "$(pwd)/dist/cli.js" mcp
+node dist/cli.js mcp
 # or: tartarus setup codex --local
 ```

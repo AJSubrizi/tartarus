@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.7.1)"
+        description: "Release tag (e.g. v0.8.0)"
         required: true
-        default: "v0.7.3"
+        default: "v0.8.0"
 
 permissions:
   contents: write
@@ -20,13 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Both Mac archs on macos-14 (macos-13 runners often stuck queued)
           - os: macos-14
             platform: mac-arm64
-            eb_args: --mac dir --arm64
+            eb_args: --mac zip --arm64
           - os: macos-14
             platform: mac-x64
-            eb_args: --mac dir --x64
+            eb_args: --mac zip --x64
           - os: ubuntu-latest
             platform: linux
             eb_args: --linux AppImage deb --x64
@@ -61,21 +60,32 @@ jobs:
       - name: Package Electron
         run: pnpm exec electron-builder ${{ matrix.eb_args }} --publish never
         env:
-          # unsigned builds for OSS
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Sign only when secrets exist (see docs/SIGNING.md)
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' && 'true' || 'false' }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Zip macOS .app
+      - name: Normalize macOS zip names
         if: startsWith(matrix.platform, 'mac')
         shell: bash
         run: |
           set -euo pipefail
           cd release
-          if [ -d mac-arm64/Tartarus.app ]; then
-            ditto -c -k --sequesterRsrc --keepParent mac-arm64/Tartarus.app Tartarus-mac-arm64.zip
-          fi
-          if [ -d mac/Tartarus.app ]; then
-            ditto -c -k --sequesterRsrc --keepParent mac/Tartarus.app Tartarus-mac-x64.zip
-          fi
+          shopt -s nullglob
+          # electron-builder zip names vary; normalize for install.sh + README
+          for f in *.zip; do
+            case "$f" in
+              *arm64*|*-arm64*) mv -f "$f" Tartarus-mac-arm64.zip 2>/dev/null || true ;;
+              *x64*|*-x64*|*intel*) mv -f "$f" Tartarus-mac-x64.zip 2>/dev/null || true ;;
+            esac
+          done
+          # Also keep any already-correct names
           ls -la
 
       - name: Rename Windows artifacts
@@ -88,7 +98,13 @@ jobs:
           for f in *.exe; do
             case "$f" in
               *Setup*|*setup*) mv -f "$f" Tartarus-win-x64-Setup.exe ;;
-              *) mv -f "$f" Tartarus-win-x64-portable.exe ;;
+              *portable*|*Portable*) mv -f "$f" Tartarus-win-x64-portable.exe ;;
+              *)
+                # first leftover → portable-ish
+                if [[ ! -f Tartarus-win-x64-portable.exe ]]; then
+                  mv -f "$f" Tartarus-win-x64-portable.exe
+                fi
+                ;;
             esac
           done
           ls -la
@@ -117,11 +133,13 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
+            release/*.yml
+            release/*.yaml
+            release/*.blockmap
           if-no-files-found: warn
 
   release:
     needs: build
-    # Publish whatever platforms succeeded (don't block forever on one runner)
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -144,7 +162,11 @@ jobs:
             -name '*.zip' -o \
             -name '*.exe' -o \
             -name '*.AppImage' -o \
-            -name '*.deb' \
+            -name '*.deb' -o \
+            -name 'latest*.yml' -o \
+            -name 'latest*.yaml' -o \
+            -name '*.blockmap' -o \
+            -name '*.yml' \
           \) -print -exec cp -f {} out/ \;
           echo "=== out ==="
           ls -lah out || true
@@ -171,17 +193,18 @@ jobs:
             | **Windows** | `Tartarus-win-x64-Setup.exe` or portable `.exe` |
             | **Linux** | `Tartarus-linux-x64.AppImage` / `.deb` |
 
-            Unzip/open the app → connect your CLIs → **Installa MCP** on Claude / Codex / Cursor.
+            Open app → **Installa MCP** on Claude / Codex / Cursor → job board watches spawns.
 
-            ### MCP (CLI, any host)
+            ### MCP
             ```bash
-            codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp
+            codex mcp add tartarus -- npx -y @ajsubrizi/tartarus mcp
+            # or: npx -y github:AJSubrizi/tartarus mcp
             ```
 
-            ### Context pack
-            `run` / `fanout` accept structured `context` (goal, constraints, files, handoff).
-            Brief → `.tartarus/brief-<job>.md` in the worker workspace.
+            ### Signing
+            Builds sign when repo secrets are set ([docs/SIGNING.md](https://github.com/AJSubrizi/tartarus/blob/main/docs/SIGNING.md)).
+            Otherwise: macOS right-click → Open; Windows SmartScreen may warn.
 
-            Builds are **unsigned** — macOS may need right-click → Open; Windows SmartScreen may warn.
+            Auto-update checks GitHub Releases when running a packaged app.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

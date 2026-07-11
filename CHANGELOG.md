@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- **Job board** in GUI: live jobs, log tail, kill (SSE + poll) — observation only, no auto-winner
+- **Auto-update** via electron-updater + GitHub Releases (`latest*.yml` uploaded)
+- **Signing hooks** in CI when secrets set — see `docs/SIGNING.md`
+- npm scope **`@ajsubrizi/tartarus`** (name `tartarus` was taken)
+- Mac release target: `zip` (updater-friendly) + normalized asset names
+- API: `POST /api/jobs/:id/kill`, dashboard includes jobs + version
+
 ## 0.7.3
 
 - App icon (macOS `.icns`, Windows `.ico`, Linux PNGs)

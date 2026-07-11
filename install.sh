@@ -120,7 +120,7 @@ latest_tag() {
   local t
   t="$(curl -fsSL "$url" | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
   if [[ -z "$t" ]]; then
-    t="v0.7.3"
+    t="v0.8.0"
   fi
   echo "$t"
 }
@@ -212,7 +212,7 @@ node_ok() {
 resolve_source() {
   local here
   here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-  if [[ -n "$here" && -f "$here/package.json" ]] && grep -q '"name": "tartarus"' "$here/package.json" 2>/dev/null; then
+  if [[ -n "$here" && -f "$here/package.json" ]] && grep -qE '"name":\s*"(@ajsubrizi/)?tartarus"' "$here/package.json" 2>/dev/null; then
     SOURCE_DIR="$here"
     MODE="local"
     return

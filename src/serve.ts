@@ -10,6 +10,7 @@ import { store, statePath } from "./state.js";
 import {
   getJobLog,
   inspectJobs,
+  killJob,
   listJobsFiltered,
   refreshHarnesses,
   snapshot,
@@ -23,6 +24,7 @@ import {
   uninstallHostMcp,
   type HostId,
 } from "./hosts.js";
+import { VERSION } from "./doctor.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -48,8 +50,10 @@ export function startHttpServer(
     try {
       if (url.pathname === "/api/dashboard" && req.method === "GET") {
         return json(res, {
+          version: VERSION,
           harnesses: store.listHarnesses(),
           ...dashboardState(),
+          jobs: listJobsFiltered({ limit: 40 }),
           projectRoot: store.state.projectRoot,
           statePath: statePath(),
         });
@@ -117,8 +121,10 @@ export function startHttpServer(
       }
 
       if (url.pathname.startsWith("/api/jobs/") && req.method === "GET") {
-        const jobId = url.pathname.split("/")[3];
-        if (url.pathname.endsWith("/log")) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        // /api/jobs/:id or /api/jobs/:id/log
+        const jobId = parts[2];
+        if (parts[3] === "log") {
           return json(
             res,
             getJobLog(jobId, Number(url.searchParams.get("tail") ?? 20_000)),
@@ -133,6 +139,22 @@ export function startHttpServer(
         return json(res, { job });
       }
 
+      if (
+        url.pathname.startsWith("/api/jobs/") &&
+        url.pathname.endsWith("/kill") &&
+        req.method === "POST"
+      ) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        const jobId = parts[2];
+        const killed = killJob(jobId);
+        const job = store.getJob(jobId);
+        return json(res, {
+          ok: killed || (job && ["killed", "done", "failed", "timed_out"].includes(job.status)),
+          killed,
+          job,
+        });
+      }
+
       if (url.pathname === "/api/inspect" && req.method === "GET") {
         const tag = url.searchParams.get("tag") ?? undefined;
         return json(res, inspectJobs({ tag }));
@@ -144,7 +166,9 @@ export function startHttpServer(
 
       if (url.pathname === "/" || url.pathname === "/index.html") {
         const bootstrap = {
+          version: VERSION,
           harnesses: store.listHarnesses(),
+          jobs: listJobsFiltered({ limit: 40 }),
           ...dashboardState(),
         };
         const html = renderUiHtml({

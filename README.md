@@ -74,9 +74,10 @@ pnpm start          # setup GUI → http://127.0.0.1:7340
 |---------|-------------|
 | **I tuoi agent** | Auto-detect CLI (Claude, Codex, Cursor, Pi, Zero, …). “Rileva di nuovo” if you install something new. |
 | **Installa MCP** | Buttons: **Claude Code** · **Codex** · **Cursor** — one click registers Tartarus there. |
+| **Job board** | Live status / log tail / kill for spawned jobs (observation only — you still pick winners via MCP). |
 | **Dopo** | Restart that app and say: `usa tartarus_help` |
 
-No hand-editing JSON required.
+No hand-editing JSON required. Packaged apps check GitHub Releases for updates (optional).
 
 ---
 
@@ -91,12 +92,17 @@ usa tartarus_help e tartarus_refresh
 ### MCP without the app
 
 ```bash
+# Preferred (scoped npm package)
+codex mcp add tartarus -- npx -y @ajsubrizi/tartarus mcp
+
+# Fallback from GitHub
 codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp
-# or:  tartarus setup codex
+
+tartarus setup codex
 tartarus doctor
 ```
 
-> **Note:** the npm name `tartarus` is taken by another package. Use the **GitHub** form above (`github:AJSubrizi/tartarus`), not `npx tartarus`.
+> Package name on npm is **`@ajsubrizi/tartarus`** (unscoped `tartarus` is a different package).
 
 ---
 

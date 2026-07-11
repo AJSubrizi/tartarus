@@ -37,7 +37,7 @@ async function main() {
       break;
     }
     case "mcp": {
-      // Entry used by: npx -y github:AJSubrizi/tartarus mcp
+      // Entry used by: npx -y @ajsubrizi/tartarus mcp
       await runMcpStdio();
       break;
     }

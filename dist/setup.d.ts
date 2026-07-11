@@ -1,5 +1,9 @@
-/** Portable install — works on any machine with network (like other MCPs) */
-export declare const NPX_PACKAGE = "github:AJSubrizi/tartarus";
+/**
+ * Portable MCP install.
+ * Prefer scoped npm package; github: form still works as fallback.
+ */
+export declare const NPX_PACKAGE = "@ajsubrizi/tartarus";
+export declare const NPX_PACKAGE_GITHUB = "github:AJSubrizi/tartarus";
 export declare function mcpLaunchNpx(): {
     command: string;
     args: string[];

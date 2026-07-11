@@ -9,8 +9,12 @@ import { dirname } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Portable install — works on any machine with network (like other MCPs) */
-export const NPX_PACKAGE = "github:AJSubrizi/tartarus";
+/**
+ * Portable MCP install.
+ * Prefer scoped npm package; github: form still works as fallback.
+ */
+export const NPX_PACKAGE = "@ajsubrizi/tartarus";
+export const NPX_PACKAGE_GITHUB = "github:AJSubrizi/tartarus";
 
 export function mcpLaunchNpx(): { command: string; args: string[] } {
   return {
