@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- MCP install like other packages: `codex mcp add tartarus -- npx -y github:AJSubrizi/tartarus mcp`
+- `tartarus setup codex` one-shot registration
+- `mcp-config` defaults to portable `npx` form
+- Ship `dist/` for instant npx from GitHub
+- Smoke uses temp git repo (no longer pollutes project author)
+
 ## 0.4.0
 
 - Durable job logs under `~/.tartarus/logs`

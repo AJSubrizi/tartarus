@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "tartarus": {
-      "command": "node",
-      "args": ["__TARTARUS_CLI__", "mcp"]
+      "command": "npx",
+      "args": ["-y", "github:AJSubrizi/tartarus", "mcp"]
     }
   }
 }

@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { store, statePath } from "./state.js";
 import { listAdapters, listWorktrees, refreshHarnesses } from "./runtime.js";
 import { logDir } from "./logs.js";
+import { NPX_PACKAGE, mcpConfigObject } from "./setup.js";
 
-export const VERSION = "0.4.0";
+export const VERSION = "0.5.0";
 
 export function doctorReport(repoRoot?: string) {
   const root = repoRoot ?? process.cwd();
@@ -17,6 +18,7 @@ export function doctorReport(repoRoot?: string) {
 
   const git = spawnSync("git", ["--version"], { encoding: "utf8" });
   const distCli = join(root, "dist", "cli.js");
+  const codex = spawnSync("codex", ["--version"], { encoding: "utf8" });
 
   const checks: Array<{ name: string; ok: boolean; detail: string }> = [
     {
@@ -52,14 +54,24 @@ export function doctorReport(repoRoot?: string) {
     {
       name: "build",
       ok: existsSync(distCli),
-      detail: existsSync(distCli) ? distCli : "run pnpm build",
+      detail: existsSync(distCli) ? distCli : "optional if using npx github install",
+    },
+    {
+      name: "codex",
+      ok: codex.status === 0,
+      detail:
+        codex.status === 0
+          ? (codex.stdout || codex.stderr || "codex ok").trim().split("\n")[0]
+          : "codex not on PATH (ok if you only use Claude/Cursor)",
     },
   ];
 
-  // Harnesses may be missing on CI / fresh machines — not a hard fail
   const hard = checks.filter(
-    (c) => !["projectRoot", "harnesses_ready"].includes(c.name),
+    (c) => !["projectRoot", "harnesses_ready", "build", "codex"].includes(c.name),
   );
+
+  const npx = mcpConfigObject("npx");
+  const local = mcpConfigObject("local", root);
 
   return {
     ok: hard.every((c) => c.ok),
@@ -79,15 +91,14 @@ export function doctorReport(repoRoot?: string) {
     adapters: adapters.filter((a) => a.resolved).map((a) => a.kind),
     worktrees: listWorktrees(),
     mcp: {
-      command: "node",
-      args: [
-        existsSync(distCli) ? distCli : join(root, "src", "cli.ts"),
-        "mcp",
-      ],
+      recommended: npx.mcpServers.tartarus,
+      local: local.mcpServers.tartarus,
+      codexOneLiner: `codex mcp add tartarus -- npx -y ${NPX_PACKAGE} mcp`,
     },
   };
 }
 
+/** @deprecated use setup.mcpConfigJson */
 export function mcpConfigJson(cliPath: string): string {
   return JSON.stringify(
     {

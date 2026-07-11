@@ -10,17 +10,18 @@ import { runMcpStdio } from "./mcp-server.js";
 import { listAdapters, refreshHarnesses } from "./runtime.js";
 import { store, statePath } from "./state.js";
 import { buildRun, formatCommandLine } from "./harnesses.js";
-import { VERSION, doctorReport, mcpConfigJson } from "./doctor.js";
+import { VERSION, doctorReport } from "./doctor.js";
+import {
+  mcpConfigJson,
+  printSetupGuide,
+  setupCodex,
+  codexAddCommand,
+  NPX_PACKAGE,
+} from "./setup.js";
 
 const [, , cmd = "help", ...rest] = process.argv;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-function cliPath(): string {
-  const dist = join(ROOT, "dist", "cli.js");
-  if (existsSync(dist)) return dist;
-  return join(ROOT, "src", "cli.ts");
-}
 
 async function main() {
   switch (cmd) {
@@ -29,6 +30,7 @@ async function main() {
       break;
     }
     case "mcp": {
+      // Entry used by: npx -y github:AJSubrizi/tartarus mcp
       await runMcpStdio();
       break;
     }
@@ -44,9 +46,36 @@ async function main() {
       if (!report.ok) process.exitCode = 1;
       break;
     }
+    case "setup": {
+      // tartarus setup [codex|claude|cursor|all]
+      const target = (rest[0] ?? "all").toLowerCase();
+      if (target === "codex") {
+        const mode = rest.includes("--local") ? "local" : "npx";
+        if (rest.includes("--print") || rest.includes("--dry-run")) {
+          console.log(codexAddCommand(mode));
+          break;
+        }
+        console.log(`Registering Tartarus with Codex (${mode})…`);
+        const result = setupCodex({ mode });
+        console.log(result.command);
+        if (result.stdout) console.log(result.stdout);
+        if (result.stderr) console.error(result.stderr);
+        if (!result.ok) {
+          console.error("\nFailed. Is `codex` on PATH? Or run the command above manually.");
+          process.exitCode = 1;
+          break;
+        }
+        console.log("\n✓ Done. Restart Codex, then try: use tartarus_help");
+        console.log("  codex mcp list");
+        break;
+      }
+      console.log(printSetupGuide());
+      break;
+    }
     case "mcp-config": {
-      const path = rest[0] ?? cliPath();
-      console.log(mcpConfigJson(path));
+      // tartarus mcp-config [--local]
+      const mode = rest.includes("--local") ? "local" : "npx";
+      console.log(mcpConfigJson(mode, ROOT));
       break;
     }
     case "status": {
@@ -60,6 +89,7 @@ async function main() {
             projectRoot: store.state.projectRoot,
             harnesses: store.listHarnesses(),
             jobs: store.listJobs(10),
+            mcp: `codex mcp add tartarus -- npx -y ${NPX_PACKAGE} mcp`,
           },
           null,
           2,
@@ -118,22 +148,20 @@ async function main() {
       console.log(`tartarus ${VERSION} — harness for the harnesses
 
   YOU (Claude / Codex / Cursor) = orchestrator
-  Tartarus                      = reliable spawn primitives
+  Tartarus                      = MCP primitives
+
+Quick setup (like any MCP):
+  codex mcp add tartarus -- npx -y ${NPX_PACKAGE} mcp
+  # or:  tartarus setup codex
 
 Usage:
-  tartarus serve [port]              Void UI (default :7340)
-  tartarus mcp                       MCP stdio for your main agent
+  tartarus mcp                       MCP stdio (what npx runs)
+  tartarus setup [codex]             Register with Codex / print guide
+  tartarus mcp-config [--local]      Print MCP JSON (default: npx)
   tartarus doctor                    Health check
-  tartarus mcp-config [cliPath]      Print MCP JSON
-  tartarus status                    Harnesses + jobs
-  tartarus refresh                   Re-probe PATH
-  tartarus adapters                  Adapter versions + notes
-  tartarus preview <id> [prompt]     Exact spawn argv (no process)
+  tartarus serve [port]              Void UI
+  tartarus status | refresh | adapters | preview
   tartarus version
-
-Install:
-  curl -fsSL …/install.sh | TARTARUS_REPO=owner/tartarus bash
-  # or: ./install.sh && tartarus doctor
 `);
   }
 }

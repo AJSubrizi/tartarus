@@ -1,11 +1,5 @@
-
-export function renderUiHtml(opts: {
-  harnessesJson: string;
-  jobsJson: string;
-  mcpSnippet: string;
-  port: number;
-}): string {
-  return `<!doctype html>
+export function renderUiHtml(opts) {
+    return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -152,23 +146,17 @@ export function renderUiHtml(opts: {
 </body>
 </html>`;
 }
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-
-export function mcpConfigSnippet(_repoRoot: string): string {
-  // Same portable form as every other MCP
-  return JSON.stringify(
-    {
-      mcpServers: {
-        tartarus: {
-          command: "npx",
-          args: ["-y", "github:AJSubrizi/tartarus", "mcp"],
+export function mcpConfigSnippet(_repoRoot) {
+    // Same portable form as every other MCP
+    return JSON.stringify({
+        mcpServers: {
+            tartarus: {
+                command: "npx",
+                args: ["-y", "github:AJSubrizi/tartarus", "mcp"],
+            },
         },
-      },
-    },
-    null,
-    2,
-  );
+    }, null, 2);
 }

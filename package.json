@@ -1,9 +1,9 @@
 {
   "name": "tartarus",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": false,
   "type": "module",
-  "description": "The harness for the harnesses — MCP primitives so Claude/Codex/Cursor orchestrate other agents",
+  "description": "The harness for the harnesses — MCP so Claude/Codex/Cursor orchestrate other agents",
   "bin": {
     "tartarus": "./dist/cli.js"
   },
@@ -21,11 +21,13 @@
     "dev": "tsx watch src/cli.ts serve",
     "dev:mcp": "tsx src/cli.ts mcp",
     "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "prepare": "node scripts/ensure-build.mjs",
     "start": "node dist/cli.js serve",
     "mcp": "node dist/cli.js mcp",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx scripts/smoke.ts",
     "doctor": "tsx src/cli.ts doctor",
+    "setup": "tsx src/cli.ts setup",
     "adapters": "tsx src/cli.ts adapters",
     "preview": "tsx src/cli.ts preview",
     "prepack": "npm run build"
@@ -49,8 +51,7 @@
     "cursor",
     "agents",
     "harness",
-    "worktree",
-    "orchestration"
+    "worktree"
   ],
   "license": "MIT",
   "repository": {

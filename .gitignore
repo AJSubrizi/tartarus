@@ -1,5 +1,6 @@
 node_modules
-dist
+# Ship dist so `npx github:AJSubrizi/tartarus mcp` works like other MCPs
+# dist is committed; local rebuilds still overwrite
 .DS_Store
 *.local
 .env
