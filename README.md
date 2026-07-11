@@ -191,16 +191,6 @@ pnpm dev
 
 ---
 
-## Not this
-
-| ADE / Orca-style apps | Tartarus |
-|----------------------|----------|
-| You operate a fleet UI | You stay in one agent |
-| Product = desktop IDE | Product = **MCP surface** |
-| Visual orchestration | Native tools inside the main harness |
-
----
-
 <p align="center">
   <sub>MIT · made by <a href="https://github.com/AJSubrizi">@AJSubrizi</a></sub>
 </p>
